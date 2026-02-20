@@ -36,9 +36,9 @@ platforms:
     name: "魔塔社区"
     envKey: "MODELSCOPE_API_KEY"
     url: "https://api-inference.modelscope.cn"
-    model: "Qwen/Qwen-Image"
+    model: "Tongyi-MAI/Z-Image-Turbo"
     enabled: true
-    description: "开源模型，免费额度"
+    description: "通义万相Turbo，快速出图"
 
   openai:
     name: "OpenAI DALL-E 3"

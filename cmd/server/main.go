@@ -217,6 +217,7 @@ func handleGenerate(c *gin.Context) {
 	var req struct {
 		Prompt   string `json:"prompt" binding:"required"`
 		Platform string `json:"platform" binding:"required"` // 必选
+		Size     string `json:"size"`                        // 可选，如 "1920x1080"
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": "请指定平台: " + err.Error()})
@@ -224,7 +225,7 @@ func handleGenerate(c *gin.Context) {
 	}
 
 	// 生成图片
-	result := generateImage(req.Platform, req.Prompt)
+	result := generateImage(req.Platform, req.Prompt, req.Size)
 
 	if result == nil {
 		c.JSON(500, gin.H{"error": "生成失败，请检查平台是否正确或API是否配置"})
@@ -459,7 +460,7 @@ type GenerateResult struct {
 	Success  bool
 }
 
-func generateImage(platform, prompt string) *GenerateResult {
+func generateImage(platform, prompt, size string) *GenerateResult {
 	p, ok := cfg.Platforms[platform]
 	if !ok || !p.Enabled {
 		return nil
@@ -470,9 +471,9 @@ func generateImage(platform, prompt string) *GenerateResult {
 		return generateAliyunImage(p, prompt)
 	}
 
-	// 魔塔社区是异步 API
+	// 魔塔社区是异步 API，支持 size 参数
 	if platform == "modelscope" {
-		return generateModelScopeImage(p, prompt)
+		return generateModelScopeImage(p, prompt, size)
 	}
 
 	// 其他平台使用同步 API (SiliconFlow, OpenAI)
@@ -604,14 +605,21 @@ func generateAliyunImage(p PlatformConfig, prompt string) *GenerateResult {
 }
 
 // 魔塔社区异步图片生成
-func generateModelScopeImage(p PlatformConfig, prompt string) *GenerateResult {
+func generateModelScopeImage(p PlatformConfig, prompt, size string) *GenerateResult {
 	client := &http.Client{Timeout: 30 * time.Second}
 
-	// 步骤1: 创建任务
-	reqBody, _ := json.Marshal(map[string]interface{}{
+	// 构建请求参数
+	reqParams := map[string]interface{}{
 		"model":  p.Model,
 		"prompt": prompt,
-	})
+	}
+	// 支持 size 参数（如 "1920x1080" 或 "2048x2048"）
+	if size != "" {
+		reqParams["size"] = size
+	}
+
+	// 步骤1: 创建任务
+	reqBody, _ := json.Marshal(reqParams)
 
 	req, _ := http.NewRequest("POST", p.URL+"/v1/images/generations", bytes.NewReader(reqBody))
 	req.Header.Set("Authorization", "Bearer "+p.APIKey)
