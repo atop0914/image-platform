@@ -37,7 +37,7 @@ platforms:
     envKey: "MODELSCOPE_API_KEY"
     url: "https://api-inference.modelscope.cn"
     model: "Qwen/Qwen-Image"
-    enabled: false
+    enabled: true
     description: "开源模型，免费额度"
 
   openai:

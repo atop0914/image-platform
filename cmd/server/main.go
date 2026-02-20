@@ -470,6 +470,11 @@ func generateImage(platform, prompt string) *GenerateResult {
 		return generateAliyunImage(p, prompt)
 	}
 
+	// 魔塔社区是异步 API
+	if platform == "modelscope" {
+		return generateModelScopeImage(p, prompt)
+	}
+
 	// 其他平台使用同步 API (SiliconFlow, OpenAI)
 	return generateSyncImage(p, prompt)
 }
@@ -592,6 +597,79 @@ func generateAliyunImage(p PlatformConfig, prompt string) *GenerateResult {
 			log.Printf("[%s] 任务失败: %s", p.Name, string(taskBody))
 			return nil
 		}
+	}
+
+	log.Printf("[%s] 任务超时", p.Name)
+	return nil
+}
+
+// 魔塔社区异步图片生成
+func generateModelScopeImage(p PlatformConfig, prompt string) *GenerateResult {
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	// 步骤1: 创建任务
+	reqBody, _ := json.Marshal(map[string]interface{}{
+		"model":  p.Model,
+		"prompt": prompt,
+	})
+
+	req, _ := http.NewRequest("POST", p.URL+"/v1/images/generations", bytes.NewReader(reqBody))
+	req.Header.Set("Authorization", "Bearer "+p.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-ModelScope-Async-Mode", "true")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("[%s] 创建任务失败: %v", p.Name, err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var taskResp struct {
+		TaskID     string `json:"task_id"`
+		TaskStatus string `json:"task_status"`
+	}
+	json.Unmarshal(body, &taskResp)
+
+	if taskResp.TaskID == "" {
+		log.Printf("[%s] 解析任务ID失败: %s", p.Name, string(body))
+		return nil
+	}
+
+	taskID := taskResp.TaskID
+	log.Printf("[%s] 任务创建成功: %s", p.Name, taskID)
+
+	// 步骤2: 轮询等待任务完成
+	maxRetries := 60 // ModelScope 可能需要更长时间
+	for i := 0; i < maxRetries; i++ {
+		time.Sleep(3 * time.Second)
+
+		taskReq, _ := http.NewRequest("GET", p.URL+"/v1/tasks/"+taskID, nil)
+		taskReq.Header.Set("Authorization", "Bearer "+p.APIKey)
+		taskReq.Header.Set("X-ModelScope-Task-Type", "image_generation")
+
+		taskResp, err := client.Do(taskReq)
+		if err != nil {
+			continue
+		}
+
+		taskBody, _ := io.ReadAll(taskResp.Body)
+		taskResp.Body.Close()
+
+		var statusResp struct {
+			TaskStatus  string   `json:"task_status"`
+			OutputImages []string `json:"output_images"`
+		}
+		json.Unmarshal(taskBody, &statusResp)
+
+		if statusResp.TaskStatus == "SUCCEED" && len(statusResp.OutputImages) > 0 {
+			return downloadAndSave(p, "modelscope", statusResp.OutputImages[0])
+		} else if statusResp.TaskStatus == "FAILED" {
+			log.Printf("[%s] 任务失败: %s", p.Name, string(taskBody))
+			return nil
+		}
+		log.Printf("[%s] 任务状态: %s", p.Name, statusResp.TaskStatus)
 	}
 
 	log.Printf("[%s] 任务超时", p.Name)
