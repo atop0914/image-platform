@@ -370,17 +370,15 @@ func generateImage(platform, prompt string) *GenerateResult {
 
 	imageURL := result.Data[0].URL
 	
-	// 目录结构: outputDir/日期/平台/时间戳_提示词.png
+	// 目录结构: outputDir/日期/平台/时间戳.png
 	now := time.Now()
 	dateDir := now.Format("2006-01-02")
 	platformDir := platform
-	safePrompt := sanitizeFilename(prompt)
-	timeDir := now.Format("150405")
 	
-	dir := filepath.Join(cfg.ImageGen.OutputDir, dateDir, platformDir, timeDir+"_"+safePrompt)
+	dir := filepath.Join(cfg.ImageGen.OutputDir, dateDir, platformDir)
 	os.MkdirAll(dir, 0755)
 	
-	filename := fmt.Sprintf("%s_%d.png", platform, now.Unix())
+	filename := fmt.Sprintf("%s.png", now.Format("150405"))
 	path := filepath.Join(dir, filename)
 
 	// 下载图片
@@ -401,17 +399,4 @@ func generateImage(platform, prompt string) *GenerateResult {
 		FilePath: path,
 		Success:  true,
 	}
-}
-
-func sanitizeFilename(name string) string {
-	// 截断提示词
-	if len(name) > 30 {
-		name = name[:30]
-	}
-	// 替换非法字符
-	name = strings.ReplaceAll(name, "/", "_")
-	name = strings.ReplaceAll(name, " ", "_")
-	name = strings.ReplaceAll(name, ":", "_")
-	name = strings.ReplaceAll(name, "\\", "_")
-	return name
 }
