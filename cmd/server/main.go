@@ -474,8 +474,25 @@ func generateImage(platform, prompt string) *GenerateResult {
 		return nil
 	}
 
-	client := &http.Client{Timeout: 60 * time.Second}
-	size := fmt.Sprintf("%dx%d", cfg.ImageGen.Width, cfg.ImageGen.Height)
+	// 阿里云百炼是异步 API
+	if platform == "aliyun" {
+		return generateAliyunImage(p, prompt)
+	}
+
+	// 其他平台使用同步 API (SiliconFlow, OpenAI)
+	return generateSyncImage(p, prompt)
+}
+
+// 同步图片生成 (SiliconFlow, OpenAI)
+func generateSyncImage(p PlatformConfig, prompt string) *GenerateResult {
+	client := &http.Client{Timeout: 120 * time.Second}
+	width, height := cfg.ImageGen.Width, cfg.ImageGen.Height
+	
+	// 如果高度是宽度的2倍（竖图），需要调整
+	size := fmt.Sprintf("%dx%d", width, height)
+	if height > width {
+		size = fmt.Sprintf("%dx%d", width/2, height)
+	}
 
 	reqBody, _ := json.Marshal(map[string]interface{}{
 		"model": p.Model, "prompt": prompt, "size": size, "n": 1,
@@ -507,13 +524,94 @@ func generateImage(platform, prompt string) *GenerateResult {
 	}
 
 	imageURL := result.Data[0].URL
+	return downloadAndSave(p, "siliconflow", imageURL)
+}
 
-	// 目录结构: outputDir/日期/平台/时间戳.png
+// 阿里云百炼异步图片生成
+func generateAliyunImage(p PlatformConfig, prompt string) *GenerateResult {
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	// 步骤1: 创建任务
+	reqBody, _ := json.Marshal(map[string]interface{}{
+		"model": p.Model,
+		"input": map[string]string{
+			"prompt": prompt,
+		},
+		"parameters": map[string]interface{}{
+			"size": fmt.Sprintf("%d*%d", cfg.ImageGen.Width, cfg.ImageGen.Height),
+			"n":     1,
+		},
+	})
+
+	req, _ := http.NewRequest("POST", "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis", bytes.NewReader(reqBody))
+	req.Header.Set("Authorization", "Bearer "+p.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-DashScope-Async", "enable")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("[%s] 创建任务失败: %v", p.Name, err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var taskResp struct {
+		Output struct {
+			TaskID string `json:"task_id"`
+		} `json:"output"`
+	}
+	if err := json.Unmarshal(body, &taskResp); err != nil || taskResp.Output.TaskID == "" {
+		log.Printf("[%s] 解析任务ID失败: %s", p.Name, string(body))
+		return nil
+	}
+
+	taskID := taskResp.Output.TaskID
+	log.Printf("[%s] 任务创建成功: %s", p.Name, taskID)
+
+	// 步骤2: 轮询等待任务完成
+	maxRetries := 30
+	for i := 0; i < maxRetries; i++ {
+		time.Sleep(2 * time.Second)
+		
+		taskReq, _ := http.NewRequest("GET", "https://dashscope.aliyuncs.com/api/v1/tasks/"+taskID, nil)
+		taskReq.Header.Set("Authorization", "Bearer "+p.APIKey)
+		
+		taskResp, err := client.Do(taskReq)
+		if err != nil {
+			continue
+		}
+		
+		taskBody, _ := io.ReadAll(taskResp.Body)
+		taskResp.Body.Close()
+		
+		var statusResp struct {
+			Output struct {
+				TaskStatus string `json:"task_status"`
+				Results    []struct {
+					URL string `json:"url"`
+				} `json:"results"`
+			} `json:"output"`
+		}
+		json.Unmarshal(taskBody, &statusResp)
+		
+		if statusResp.Output.TaskStatus == "SUCCEEDED" && len(statusResp.Output.Results) > 0 {
+			return downloadAndSave(p, "aliyun", statusResp.Output.Results[0].URL)
+		} else if statusResp.Output.TaskStatus == "FAILED" {
+			log.Printf("[%s] 任务失败: %s", p.Name, string(taskBody))
+			return nil
+		}
+	}
+
+	log.Printf("[%s] 任务超时", p.Name)
+	return nil
+}
+
+// 下载并保存图片
+func downloadAndSave(p PlatformConfig, platform, imageURL string) *GenerateResult {
 	now := time.Now()
 	dateDir := now.Format("2006-01-02")
-	platformDir := platform
-
-	dir := filepath.Join(cfg.ImageGen.OutputDir, dateDir, platformDir)
+	dir := filepath.Join(cfg.ImageGen.OutputDir, dateDir, platform)
 	os.MkdirAll(dir, 0755)
 
 	filename := fmt.Sprintf("%s.png", now.Format("150405"))

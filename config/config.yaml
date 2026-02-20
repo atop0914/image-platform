@@ -21,8 +21,16 @@ platforms:
     envKey: "SILICONFLOW_API_KEY"
     url: "https://api.siliconflow.cn/v1"
     model: "Kwai-Kolors/Kolors"
-    enabled: false
-    description: "国内首选，稳定"
+    enabled: true
+    description: "Kolors 模型，性价比高"
+
+  aliyun:
+    name: "阿里云百炼"
+    envKey: "ALIYUN_API_KEY"
+    url: "https://dashscope.aliyuncs.com/api/v1"
+    model: "wanx-v1"
+    enabled: true
+    description: "通义万相，国内稳定"
 
   openai:
     name: "OpenAI DALL-E 3"
