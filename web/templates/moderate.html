@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>审核图片 - 图片审核平台</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .info-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+        .platform-badge { background: #6366f1; color: white; padding: 4px 10px; border-radius: 4px; font-size: 12px; }
+        .model-badge { background: #10b981; color: white; padding: 4px 10px; border-radius: 4px; font-size: 12px; }
+        .prompt-text { background: #f3f4f6; padding: 8px 12px; border-radius: 4px; font-size: 14px; color: #374151; margin-top: 8px; }
+    </style>
 </head>
 <body>
     <div class="app">
@@ -24,7 +30,11 @@
                             <img id="imagePreview" src="" alt="">
                         </div>
                         <div class="image-info">
-                            <h2 id="imageName"></h2>
+                            <div class="info-row">
+                                <span class="platform-badge" id="imagePlatform"></span>
+                                <span class="model-badge" id="imageModel"></span>
+                            </div>
+                            <div class="prompt-text" id="imagePrompt"></div>
                             <p class="image-date" id="imageDate"></p>
                             <p class="image-path" id="imagePath"></p>
                         </div>
@@ -60,13 +70,16 @@
     </div>
 
     <script>
-        // 页面数据由后端渲染
         const record = {{ .record }};
         
         document.getElementById('imageId').value = record.id;
         document.getElementById('imagePreview').src = record.path;
-        document.getElementById('imageName').textContent = record.name;
-        document.getElementById('imageDate').textContent = '📅 ' + record.date;
+        document.getElementById('imagePlatform').textContent = record.platform || '-';
+        document.getElementById('imageModel').textContent = record.model ? record.model.split('/').pop() : '-';
+        document.getElementById('imagePrompt').textContent = record.prompt || record.name || '-';
+        
+        const genTime = record.generated_at ? new Date(record.generated_at).toLocaleString('zh-CN') : record.date;
+        document.getElementById('imageDate').textContent = '🕐 ' + genTime;
         document.getElementById('imagePath').textContent = record.path;
         document.getElementById('note').value = record.note || '';
 

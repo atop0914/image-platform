@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -64,6 +65,10 @@ type ImageRecord struct {
 	Name        string     `gorm:"size:255;not null" json:"name"`
 	Date        string     `gorm:"size:20;not null" json:"date"`
 	Path        string     `gorm:"size:512;not null" json:"path"`
+	Platform    string     `gorm:"size:50;not null" json:"platform"`      // 平台名称
+	Model       string     `gorm:"size:100;not null" json:"model"`       // 模型名称
+	Prompt      string     `gorm:"size:1000" json:"prompt"`              // 提示词
+	GeneratedAt time.Time  `gorm:"not null" json:"generated_at"`         // 生成时间
 	Status      string     `gorm:"size:20;default:'pending'" json:"status"`
 	Note        string     `gorm:"type:text" json:"note"`
 	ModeratedAt *time.Time `json:"moderated_at"`
@@ -159,7 +164,7 @@ func moderatePage(c *gin.Context) {
 
 func recordsPage(c *gin.Context) {
 	var records []ImageRecord
-	db.Order("created_at DESC").Limit(100).Find(&records)
+	db.Order("generated_at DESC").Limit(100).Find(&records)
 	c.HTML(http.StatusOK, "records.html", gin.H{"records": records, "total": len(records)})
 }
 
@@ -196,15 +201,20 @@ func handleGenerate(c *gin.Context) {
 	}
 
 	// 自动投递审核
+	genTime := time.Now()
 	record := ImageRecord{
-		Name:   fmt.Sprintf("gen_%d_%s", time.Now().Unix(), req.Platform),
-		Date:   time.Now().Format("2006-01-02"),
-		Path:   result.FilePath,
-		Status: "pending",
+		Name:        result.Filename,
+		Date:        genTime.Format("2006-01-02"),
+		Path:        result.FilePath,
+		Platform:    result.Platform,
+		Model:       result.Model,
+		Prompt:      req.Prompt,
+		GeneratedAt: genTime,
+		Status:      "pending",
 	}
 	db.Create(&record)
 
-	c.JSON(200, gin.H{"message": "success", "filePath": result.FilePath, "platform": result.Platform})
+	c.JSON(200, gin.H{"message": "success", "filePath": result.FilePath, "platform": result.Platform, "model": result.Model})
 }
 
 func listImages(c *gin.Context) {
@@ -213,7 +223,7 @@ func listImages(c *gin.Context) {
 	if s := c.DefaultQuery("status", "all"); s != "all" {
 		query = query.Where("status = ?", s)
 	}
-	query.Order("created_at DESC").Limit(100).Find(&records)
+	query.Order("generated_at DESC").Limit(100).Find(&records)
 	c.JSON(200, gin.H{"records": records, "total": len(records)})
 }
 
@@ -234,7 +244,7 @@ func moderateImage(c *gin.Context) {
 
 func listRecords(c *gin.Context) {
 	var records []ImageRecord
-	db.Order("created_at DESC").Limit(100).Find(&records)
+	db.Order("generated_at DESC").Limit(100).Find(&records)
 	c.JSON(200, gin.H{"records": records, "total": len(records)})
 }
 
@@ -249,14 +259,24 @@ func dailyReport(c *gin.Context) {
 	db.Where("date = ?", date).Find(&records)
 
 	approved, rejected, pending := 0, 0, 0
+	platformStats := make(map[string]int)
 	for _, r := range records {
 		switch r.Status {
 		case "approved": approved++
 		case "rejected": rejected++
 		default: pending++
 		}
+		platformStats[r.Platform]++
 	}
-	c.JSON(200, gin.H{"date": date, "total": len(records), "approved": approved, "rejected": rejected, "pending": pending, "images": records})
+	c.JSON(200, gin.H{
+		"date":     date,
+		"total":    len(records),
+		"approved": approved,
+		"rejected": rejected,
+		"pending":  pending,
+		"platform_stats": platformStats,
+		"images":   records,
+	})
 }
 
 // ========== 工具函数 ==========
@@ -303,9 +323,11 @@ func setupLogging() {
 
 // ========== 图片生成 ==========
 type GenerateResult struct {
-	Platform string
-	FilePath string
-	Success  bool
+	Platform  string
+	Model     string
+	Filename  string
+	FilePath  string
+	Success   bool
 }
 
 func generateImage(platform, prompt string) *GenerateResult {
@@ -316,7 +338,7 @@ func generateImage(platform, prompt string) *GenerateResult {
 
 	client := &http.Client{Timeout: 60 * time.Second}
 	size := fmt.Sprintf("%dx%d", cfg.ImageGen.Width, cfg.ImageGen.Height)
-	
+
 	reqBody, _ := json.Marshal(map[string]interface{}{
 		"model": p.Model, "prompt": prompt, "size": size, "n": 1,
 	})
@@ -347,9 +369,19 @@ func generateImage(platform, prompt string) *GenerateResult {
 	}
 
 	imageURL := result.Data[0].URL
-	dir := fmt.Sprintf("%s/%s", cfg.ImageGen.OutputDir, time.Now().Format("20060102_150405"))
+	
+	// 目录结构: outputDir/日期/平台/时间戳_提示词.png
+	now := time.Now()
+	dateDir := now.Format("2006-01-02")
+	platformDir := platform
+	safePrompt := sanitizeFilename(prompt)
+	timeDir := now.Format("150405")
+	
+	dir := filepath.Join(cfg.ImageGen.OutputDir, dateDir, platformDir, timeDir+"_"+safePrompt)
 	os.MkdirAll(dir, 0755)
-	path := fmt.Sprintf("%s/%s_%d.png", dir, platform, time.Now().Unix())
+	
+	filename := fmt.Sprintf("%s_%d.png", platform, now.Unix())
+	path := filepath.Join(dir, filename)
 
 	// 下载图片
 	imgResp, err := http.Get(imageURL)
@@ -362,5 +394,24 @@ func generateImage(platform, prompt string) *GenerateResult {
 	os.WriteFile(path, data, 0644)
 
 	log.Printf("[%s] 生成成功: %s", p.Name, path)
-	return &GenerateResult{Platform: p.Name, FilePath: path, Success: true}
+	return &GenerateResult{
+		Platform: p.Name,
+		Model:    p.Model,
+		Filename: filename,
+		FilePath: path,
+		Success:  true,
+	}
+}
+
+func sanitizeFilename(name string) string {
+	// 截断提示词
+	if len(name) > 30 {
+		name = name[:30]
+	}
+	// 替换非法字符
+	name = strings.ReplaceAll(name, "/", "_")
+	name = strings.ReplaceAll(name, " ", "_")
+	name = strings.ReplaceAll(name, ":", "_")
+	name = strings.ReplaceAll(name, "\\", "_")
+	return name
 }

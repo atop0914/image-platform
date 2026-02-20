@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>图片审核平台</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .platform-badge { background: #6366f1; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-right: 4px; }
+        .model-badge { background: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+    </style>
 </head>
 <body>
     <div class="app">
@@ -109,11 +113,15 @@
                         <img src="${r.path}" alt="${r.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23f0f0f0%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22%23999%22 font-size=%2212%22>图片加载失败</text></svg>'">
                     </div>
                     <div class="card-body">
-                        <h3 class="card-title" title="${r.name}">${r.name}</h3>
-                        <p class="card-date">📅 ${r.date}</p>
+                        <h3 class="card-title" title="${r.prompt || r.name}">${r.prompt ? (r.prompt.length > 30 ? r.prompt.slice(0,30) + '...' : r.prompt) : r.name}</h3>
+                        <div style="margin: 4px 0;">
+                            <span class="platform-badge">${r.platform || '-'}</span>
+                            <span class="model-badge">${r.model ? r.model.split('/').pop() : '-'}</span>
+                        </div>
+                        <p class="card-date">📅 ${r.date} ${r.generated_at ? new Date(r.generated_at).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}) : ''}</p>
                         <div class="card-actions">
-                            <button class="btn btn-success btn-sm" onclick="quickModerate(${r.id}, 'approved')">✅ 通过</button>
-                            <button class="btn btn-danger btn-sm" onclick="quickModerate(${r.id}, 'rejected')">❌ 拒绝</button>
+                            <button class="btn btn-success btn-sm" onclick="quickModerate(${r.id}, 'approved')">✅</button>
+                            <button class="btn btn-danger btn-sm" onclick="quickModerate(${r.id}, 'rejected')">❌</button>
                             <button class="btn btn-primary btn-sm" onclick="location.href='/moderate/${r.id}'">详细</button>
                         </div>
                     </div>

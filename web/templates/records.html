@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>审核记录 - 图片审核平台</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .table-image img { width: 80px; height: 80px; object-fit: cover; border-radius: 4px; }
+        .platform-badge { background: #6366f1; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+        .model-badge { background: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+        .prompt-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    </style>
 </head>
 <body>
     <div class="app">
@@ -48,8 +54,10 @@
                             <tr>
                                 <th>ID</th>
                                 <th>图片</th>
-                                <th>名称</th>
-                                <th>日期</th>
+                                <th>提示词</th>
+                                <th>平台</th>
+                                <th>模型</th>
+                                <th>生成时间</th>
                                 <th>状态</th>
                                 <th>备注</th>
                                 <th>审核时间</th>
@@ -93,6 +101,15 @@
             }
         }
 
+        function formatTime(timestamp) {
+            if (!timestamp) return '-';
+            const d = new Date(timestamp);
+            return d.toLocaleString('zh-CN', { 
+                year: 'numeric', month: '2-digit', day: '2-digit', 
+                hour: '2-digit', minute: '2-digit', second: '2-digit' 
+            });
+        }
+
         function renderRecords(records) {
             const tbody = document.getElementById('recordsBody');
             const empty = document.getElementById('emptyState');
@@ -113,15 +130,17 @@
                             <img src="${r.path}" alt="" onerror="this.style.display='none'">
                         </div>
                     </td>
-                    <td>${r.name}</td>
-                    <td>${r.date}</td>
+                    <td class="prompt-cell" title="${r.prompt || ''}">${r.prompt || '-'}</td>
+                    <td><span class="platform-badge">${r.platform || '-'}</span></td>
+                    <td><span class="model-badge">${r.model || '-'}</td>
+                    <td>${formatTime(r.generated_at)}</td>
                     <td>
                         <span class="status-badge ${r.status}">
                             ${r.status === 'approved' ? '✅ 通过' : r.status === 'rejected' ? '❌ 拒绝' : '⏳ 待审核'}
                         </span>
                     </td>
                     <td class="note-cell">${r.note || '-'}</td>
-                    <td>${r.moderated_at ? new Date(r.moderated_at).toLocaleString('zh-CN') : '-'}</td>
+                    <td>${formatTime(r.moderated_at)}</td>
                     <td>
                         ${r.status === 'pending' ? `<button class="btn btn-primary btn-sm" onclick="location.href='/moderate/${r.id}'">审核</button>` : ''}
                         <button class="btn btn-default btn-sm" onclick="deleteRecord(${r.id})">🗑️</button>
