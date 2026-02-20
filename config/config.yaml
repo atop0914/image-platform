@@ -32,6 +32,14 @@ platforms:
     enabled: true
     description: "通义万相，国内稳定"
 
+  modelscope:
+    name: "魔塔社区"
+    envKey: "MODELSCOPE_API_KEY"
+    url: "https://api-inference.modelscope.cn"
+    model: "Qwen/Qwen-Image"
+    enabled: false
+    description: "开源模型，免费额度"
+
   openai:
     name: "OpenAI DALL-E 3"
     envKey: "OPENAI_API_KEY"
