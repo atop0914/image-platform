@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添加图片 - 图片审核平台</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app">
+        <aside class="sidebar">
+            <div class="logo">
+                <span class="logo-icon">🖼️</span>
+                <span class="logo-text">图片审核</span>
+            </div>
+            <nav class="nav">
+                <a href="/" class="nav-item">
+                    <span class="nav-icon">📋</span>
+                    <span>待审核</span>
+                </a>
+                <a href="/records" class="nav-item">
+                    <span class="nav-icon">📊</span>
+                    <span>审核记录</span>
+                </a>
+                <a href="/add" class="nav-item active">
+                    <span class="nav-icon">➕</span>
+                    <span>添加图片</span>
+                </a>
+            </nav>
+        </aside>
+
+        <main class="main">
+            <header class="header">
+                <h1>
+                    <a href="/" class="back-link">←</a>
+                    添加图片
+                </h1>
+            </header>
+
+            <div class="content">
+                <div class="form-card">
+                    <form id="addForm" class="add-form">
+                        <div class="form-group">
+                            <label for="name">📷 图片名称</label>
+                            <input type="text" id="name" name="name" placeholder="例如: product_001.jpg" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="date">📅 日期</label>
+                            <input type="date" id="date" name="date" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="path">📂 本地路径</label>
+                            <input type="text" id="path" name="path" placeholder="/home/user/images/product_001.jpg" required>
+                            <p class="form-hint">图片在服务器上的完整路径</p>
+                        </div>
+
+                        <div class="form-group">
+                            <label>预览路径</label>
+                            <div class="path-preview" id="pathPreview">
+                                <span class="placeholder">输入路径后预览</span>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-default" onclick="location.href='/'">取消</button>
+                            <button type="submit" class="btn btn-primary">➕ 添加</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // 设置默认日期为今天
+        document.getElementById('date').valueAsDate = new Date();
+
+        // 路径预览
+        document.getElementById('path').addEventListener('input', function() {
+            const preview = document.getElementById('pathPreview');
+            if (this.value) {
+                preview.innerHTML = `<img src="${this.value}" onerror="this.style.display='none'" onload="this.style.display='block'">`;
+            } else {
+                preview.innerHTML = '<span class="placeholder">输入路径后预览</span>';
+            }
+        });
+
+        // 提交表单
+        document.getElementById('addForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = {
+                name: document.getElementById('name').value,
+                date: document.getElementById('date').value,
+                path: document.getElementById('path').value
+            };
+
+            try {
+                const res = await fetch('/api/images', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(formData)
+                });
+                
+                if (res.ok) {
+                    alert('添加成功！');
+                    location.href = '/';
+                } else {
+                    const data = await res.json();
+                    alert('添加失败: ' + data.error);
+                }
+            } catch (e) {
+                alert('添加失败: ' + e.message);
+            }
+        });
+    </script>
+</body>
+</html>

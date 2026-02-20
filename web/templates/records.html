@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>审核记录 - 图片审核平台</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app">
+        <aside class="sidebar">
+            <div class="logo">
+                <span class="logo-icon">🖼️</span>
+                <span class="logo-text">图片审核</span>
+            </div>
+            <nav class="nav">
+                <a href="/" class="nav-item">
+                    <span class="nav-icon">📋</span>
+                    <span>待审核</span>
+                </a>
+                <a href="/records" class="nav-item active">
+                    <span class="nav-icon">📊</span>
+                    <span>审核记录</span>
+                </a>
+                <a href="/add" class="nav-item">
+                    <span class="nav-icon">➕</span>
+                    <span>添加图片</span>
+                </a>
+            </nav>
+        </aside>
+
+        <main class="main">
+            <header class="header">
+                <h1>审核记录</h1>
+                <div class="header-actions">
+                    <select id="statusFilter" class="select" onchange="filterRecords()">
+                        <option value="all">全部</option>
+                        <option value="approved">已通过</option>
+                        <option value="rejected">已拒绝</option>
+                    </select>
+                </div>
+            </header>
+
+            <div class="content">
+                <div class="records-table-container">
+                    <table class="records-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>图片</th>
+                                <th>名称</th>
+                                <th>日期</th>
+                                <th>状态</th>
+                                <th>备注</th>
+                                <th>审核时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recordsBody">
+                            <!-- 数据将通过 JS 渲染 -->
+                        </tbody>
+                    </table>
+                    <div class="empty-state" id="emptyState" style="display: none;">
+                        <div class="empty-icon">📭</div>
+                        <p>暂无审核记录</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let allRecords = [];
+
+        async function loadRecords() {
+            try {
+                const res = await fetch('/api/records');
+                const data = await res.json();
+                allRecords = data.records;
+                renderRecords(allRecords);
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function filterRecords() {
+            const status = document.getElementById('statusFilter').value;
+            if (status === 'all') {
+                renderRecords(allRecords);
+            } else {
+                const filtered = allRecords.filter(r => r.status === status);
+                renderRecords(filtered);
+            }
+        }
+
+        function renderRecords(records) {
+            const tbody = document.getElementById('recordsBody');
+            const empty = document.getElementById('emptyState');
+
+            if (records.length === 0) {
+                tbody.innerHTML = '';
+                empty.style.display = 'flex';
+                return;
+            }
+
+            empty.style.display = 'none';
+            
+            tbody.innerHTML = records.map(r => `
+                <tr>
+                    <td>${r.id}</td>
+                    <td>
+                        <div class="table-image">
+                            <img src="${r.path}" alt="" onerror="this.style.display='none'">
+                        </div>
+                    </td>
+                    <td>${r.name}</td>
+                    <td>${r.date}</td>
+                    <td>
+                        <span class="status-badge ${r.status}">
+                            ${r.status === 'approved' ? '✅ 通过' : r.status === 'rejected' ? '❌ 拒绝' : '⏳ 待审核'}
+                        </span>
+                    </td>
+                    <td class="note-cell">${r.note || '-'}</td>
+                    <td>${r.moderated_at ? new Date(r.moderated_at).toLocaleString('zh-CN') : '-'}</td>
+                    <td>
+                        ${r.status === 'pending' ? `<button class="btn btn-primary btn-sm" onclick="location.href='/moderate/${r.id}'">审核</button>` : ''}
+                        <button class="btn btn-default btn-sm" onclick="deleteRecord(${r.id})">🗑️</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function deleteRecord(id) {
+            if (!confirm('确定删除这条记录吗？')) return;
+            
+            try {
+                const res = await fetch('/api/images/' + id, {method: 'DELETE'});
+                if (res.ok) {
+                    loadRecords();
+                }
+            } catch (e) {
+                alert('删除失败');
+            }
+        }
+
+        loadRecords();
+    </script>
+</body>
+</html>

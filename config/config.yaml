@@ -1,0 +1,37 @@
+server:
+  port: "8081"
+
+database:
+  host: localhost
+  port: 3306
+  user: root
+  password: secret
+  dbname: image_platform
+
+imageGen:
+  outputDir: "~/generated_images"
+  logDir: "~/generated_images/logs"
+  width: 1024
+  height: 2048
+  maxRetries: 3
+  retryDelay: 3
+  timeout: 180
+  maxWorkers: 5
+
+# 平台配置 - API Key 从环境变量自动加载
+platforms:
+  siliconflow:
+    name: "硅基流动"
+    envKey: "SILICONFLOW_API_KEY"
+    url: "https://api.siliconflow.cn/v1"
+    model: "Kwai-Kolors/Kolors"
+    enabled: false
+    description: "国内首选，稳定"
+
+  openai:
+    name: "OpenAI DALL-E 3"
+    envKey: "OPENAI_API_KEY"
+    url: "https://api.openai.com/v1"
+    model: "dall-e-3"
+    enabled: false
+    description: "质量最高"

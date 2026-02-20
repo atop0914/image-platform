@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>审核图片 - 图片审核平台</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app">
+        <main class="main full-width">
+            <header class="header">
+                <h1>
+                    <a href="/" class="back-link">←</a>
+                    图片审核
+                </h1>
+            </header>
+
+            <div class="content">
+                <div class="moderate-container">
+                    <!-- 图片预览 -->
+                    <div class="image-preview">
+                        <div class="image-frame">
+                            <img id="imagePreview" src="" alt="">
+                        </div>
+                        <div class="image-info">
+                            <h2 id="imageName"></h2>
+                            <p class="image-date" id="imageDate"></p>
+                            <p class="image-path" id="imagePath"></p>
+                        </div>
+                    </div>
+
+                    <!-- 审核表单 -->
+                    <div class="moderate-form">
+                        <div class="current-status" id="currentStatus">
+                            <span class="status-badge pending">待审核</span>
+                        </div>
+
+                        <form id="moderateForm">
+                            <input type="hidden" id="imageId" value="">
+
+                            <div class="form-group">
+                                <label for="note">📝 审核备注</label>
+                                <textarea id="note" name="note" rows="4" placeholder="请输入审核备注..."></textarea>
+                            </div>
+
+                            <div class="action-buttons">
+                                <button type="button" class="btn btn-success btn-large" onclick="submitModerate('approved')">
+                                    ✅ 通过
+                                </button>
+                                <button type="button" class="btn btn-danger btn-large" onclick="submitModerate('rejected')">
+                                    ❌ 拒绝
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // 页面数据由后端渲染
+        const record = {{ .record }};
+        
+        document.getElementById('imageId').value = record.id;
+        document.getElementById('imagePreview').src = record.path;
+        document.getElementById('imageName').textContent = record.name;
+        document.getElementById('imageDate').textContent = '📅 ' + record.date;
+        document.getElementById('imagePath').textContent = record.path;
+        document.getElementById('note').value = record.note || '';
+
+        // 显示当前状态
+        const statusDiv = document.getElementById('currentStatus');
+        if (record.status !== 'pending') {
+            const statusMap = {approved: '已通过', rejected: '已拒绝'};
+            statusDiv.innerHTML = `<span class="status-badge ${record.status}">${statusMap[record.status]}</span>`;
+        }
+
+        async function submitModerate(status) {
+            const id = document.getElementById('imageId').value;
+            const note = document.getElementById('note').value;
+
+            try {
+                const res = await fetch('/api/moderate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({id: parseInt(id), status, note})
+                });
+
+                if (res.ok) {
+                    alert('审核成功！');
+                    location.href = '/';
+                } else {
+                    const data = await res.json();
+                    alert('审核失败: ' + data.error);
+                }
+            } catch (e) {
+                alert('审核失败: ' + e.message);
+            }
+        }
+    </script>
+</body>
+</html>

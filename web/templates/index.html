@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片审核平台</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="logo">
+                <span class="logo-icon">🖼️</span>
+                <span class="logo-text">图片审核</span>
+            </div>
+            <nav class="nav">
+                <a href="/" class="nav-item active">
+                    <span class="nav-icon">📋</span>
+                    <span>待审核</span>
+                    <span class="badge" id="pendingBadge">0</span>
+                </a>
+                <a href="/records" class="nav-item">
+                    <span class="nav-icon">📊</span>
+                    <span>审核记录</span>
+                </a>
+                <a href="/add" class="nav-item">
+                    <span class="nav-icon">➕</span>
+                    <span>添加图片</span>
+                </a>
+            </nav>
+            <div class="stats-mini">
+                <div class="stat-item">
+                    <span class="stat-value approved" id="approvedCount">0</span>
+                    <span class="stat-label">已通过</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value rejected" id="rejectedCount">0</span>
+                    <span class="stat-label">已拒绝</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 主内容 -->
+        <main class="main">
+            <header class="header">
+                <h1>待审核图片</h1>
+                <div class="header-actions">
+                    <button class="btn btn-primary" onclick="location.href='/add'">
+                        ➕ 添加图片
+                    </button>
+                </div>
+            </header>
+
+            <div class="content">
+                <div class="image-grid" id="imageGrid">
+                    <!-- 图片卡片将通过 JS 渲染 -->
+                </div>
+                <div class="empty-state" id="emptyState" style="display: none;">
+                    <div class="empty-icon">📭</div>
+                    <p>暂无待审核图片</p>
+                    <button class="btn btn-primary" onclick="location.href='/add'">添加图片</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+        // 加载数据
+        async function loadData() {
+            try {
+                const res = await fetch('/api/images?status=pending');
+                const data = await res.json();
+                
+                document.getElementById('pendingBadge').textContent = data.total;
+                
+                // 加载统计
+                const approvedRes = await fetch('/api/images?status=approved');
+                const approvedData = await approvedRes.json();
+                document.getElementById('approvedCount').textContent = approvedData.total;
+                
+                const rejectedRes = await fetch('/api/images?status=rejected');
+                const rejectedData = await rejectedRes.json();
+                document.getElementById('rejectedCount').textContent = rejectedData.total;
+                
+                renderImages(data.records);
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function renderImages(records) {
+            const grid = document.getElementById('imageGrid');
+            const empty = document.getElementById('emptyState');
+            
+            if (records.length === 0) {
+                grid.style.display = 'none';
+                empty.style.display = 'flex';
+                return;
+            }
+            
+            grid.style.display = 'grid';
+            empty.style.display = 'none';
+            
+            grid.innerHTML = records.map(r => `
+                <div class="image-card">
+                    <div class="image-wrapper">
+                        <img src="${r.path}" alt="${r.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23f0f0f0%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22%23999%22 font-size=%2212%22>图片加载失败</text></svg>'">
+                    </div>
+                    <div class="card-body">
+                        <h3 class="card-title" title="${r.name}">${r.name}</h3>
+                        <p class="card-date">📅 ${r.date}</p>
+                        <div class="card-actions">
+                            <button class="btn btn-success btn-sm" onclick="quickModerate(${r.id}, 'approved')">✅ 通过</button>
+                            <button class="btn btn-danger btn-sm" onclick="quickModerate(${r.id}, 'rejected')">❌ 拒绝</button>
+                            <button class="btn btn-primary btn-sm" onclick="location.href='/moderate/${r.id}'">详细</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function quickModerate(id, status) {
+            try {
+                const res = await fetch('/api/moderate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({id, status, note: ''})
+                });
+                if (res.ok) {
+                    loadData();
+                }
+            } catch (e) {
+                alert('操作失败');
+            }
+        }
+
+        loadData();
+    </script>
+</body>
+</html>
