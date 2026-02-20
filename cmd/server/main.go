@@ -55,12 +55,13 @@ type ImageGenConfig struct {
 type PlatformConfigs map[string]PlatformConfig
 
 type PlatformConfig struct {
-	Name    string `yaml:"name"`
-	EnvKey  string `yaml:"envKey"`
-	APIKey  string `yaml:"apiKey"`
-	URL     string `yaml:"url"`
-	Model   string `yaml:"model"`
-	Enabled bool   `yaml:"enabled"`
+	Name        string `yaml:"name"`
+	EnvKey      string `yaml:"envKey"`
+	APIKey      string `yaml:"apiKey"`
+	URL         string `yaml:"url"`
+	Model       string `yaml:"model"`
+	Enabled     bool   `yaml:"enabled"`
+	Description string `yaml:"description"`
 }
 
 type PublishConfig struct {
@@ -215,31 +216,18 @@ func galleryPage(c *gin.Context) {
 func handleGenerate(c *gin.Context) {
 	var req struct {
 		Prompt   string `json:"prompt" binding:"required"`
-		Platform string `json:"platform"`
+		Platform string `json:"platform" binding:"required"` // 必选
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(400, gin.H{"error": "请指定平台: " + err.Error()})
 		return
 	}
 
-	platforms := getEnabledPlatforms()
-	var result *GenerateResult
-
-	if req.Platform != "" {
-		result = generateImage(req.Platform, req.Prompt)
-	} else {
-		for key, p := range platforms {
-			r := generateImage(key, req.Prompt)
-			if r != nil {
-				result = r
-				break
-			}
-			log.Printf("[%s] 生成失败", p.Name)
-		}
-	}
+	// 生成图片
+	result := generateImage(req.Platform, req.Prompt)
 
 	if result == nil {
-		c.JSON(500, gin.H{"error": "所有平台生成失败"})
+		c.JSON(500, gin.H{"error": "生成失败，请检查平台是否正确或API是否配置"})
 		return
 	}
 
@@ -380,12 +368,15 @@ func handlePublish(c *gin.Context) {
 
 // ========== 平台列表 API ==========
 func listPlatforms(c *gin.Context) {
-	platforms := pubManager.List()
-	result := make([]map[string]string, 0, len(platforms))
-	for _, p := range platforms {
-		result = append(result, map[string]string{
-			"type": string(p.Type()),
-			"name": p.Name(),
+	platforms := getEnabledPlatforms()
+	result := make([]map[string]interface{}, 0, len(platforms))
+	for key, p := range platforms {
+		result = append(result, map[string]interface{}{
+			"id":          key,
+			"name":        p.Name,
+			"model":       p.Model,
+			"description": p.Description,
+			"enabled":     p.Enabled,
 		})
 	}
 	c.JSON(200, gin.H{"platforms": result})
