@@ -58,6 +58,14 @@ platforms:
     enabled: true
     description: "通义万相，国内稳定"
 
+  modelscope:
+    name: "魔塔社区"
+    envKey: "MODELSCOPE_API_KEY"
+    url: "https://api-inference.modelscope.cn"
+    model: "Tongyi-MAI/Z-Image-Turbo"
+    enabled: true
+    description: "免费额度，速度快"
+
   openai:
     name: "OpenAI DALL-E 3"
     envKey: "OPENAI_API_KEY"
@@ -77,6 +85,9 @@ export SILICONFLOW_API_KEY='your-key'
 
 # 阿里云百炼
 export ALIYUN_API_KEY='your-key'
+
+# 魔塔社区
+export MODELSCOPE_API_KEY='your-key'
 
 # OpenAI
 export OPENAI_API_KEY='your-key'
