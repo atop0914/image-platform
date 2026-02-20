@@ -218,6 +218,7 @@ func handleGenerate(c *gin.Context) {
 		Prompt   string `json:"prompt" binding:"required"`
 		Platform string `json:"platform" binding:"required"` // 必选
 		Size     string `json:"size"`                        // 可选，如 "1920x1080"
+		Model    string `json:"model"`                       // 可选，指定模型
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": "请指定平台: " + err.Error()})
@@ -225,7 +226,7 @@ func handleGenerate(c *gin.Context) {
 	}
 
 	// 生成图片
-	result := generateImage(req.Platform, req.Prompt, req.Size)
+	result := generateImage(req.Platform, req.Prompt, req.Size, req.Model)
 
 	if result == nil {
 		c.JSON(500, gin.H{"error": "生成失败，请检查平台是否正确或API是否配置"})
@@ -460,10 +461,15 @@ type GenerateResult struct {
 	Success  bool
 }
 
-func generateImage(platform, prompt, size string) *GenerateResult {
+func generateImage(platform, prompt, size, model string) *GenerateResult {
 	p, ok := cfg.Platforms[platform]
 	if !ok || !p.Enabled {
 		return nil
+	}
+
+	// 如果指定了模型，覆盖默认模型
+	if model != "" {
+		p.Model = model
 	}
 
 	// 阿里云百炼是异步 API
