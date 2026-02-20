@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -19,6 +20,8 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	"image-platform/internal/publisher"
 )
 
 // ========== 配置 ==========
@@ -27,6 +30,7 @@ type Config struct {
 	Database   DatabaseConfig   `yaml:"database"`
 	ImageGen   ImageGenConfig  `yaml:"imageGen"`
 	Platforms  PlatformConfigs `yaml:"platforms"`
+	Publish    PublishConfig   `yaml:"publish"`
 }
 
 type ServerConfig struct {
@@ -59,20 +63,36 @@ type PlatformConfig struct {
 	Enabled bool   `yaml:"enabled"`
 }
 
+type PublishConfig struct {
+	Xiaohongshu struct {
+		Enabled    bool   `yaml:"enabled"`
+		MCPURL     string `yaml:"mcpUrl"`
+		Cookies    string `yaml:"cookies"`
+		XSecToken  string `yaml:"xSecToken"`
+	} `yaml:"xiaohongshu"`
+	Douyin struct {
+		Enabled bool   `yaml:"enabled"`
+	} `yaml:"douyin"`
+	Bilibili struct {
+		Enabled bool   `yaml:"enabled"`
+		Cookie  string `yaml:"cookie"`
+	} `yaml:"bilibili"`
+}
+
 // ========== 数据模型 ==========
 type ImageRecord struct {
-	ID          uint       `gorm:"primaryKey" json:"id"`
-	Name        string     `gorm:"size:255;not null" json:"name"`
-	Date        string     `gorm:"size:20;not null" json:"date"`
-	Path        string     `gorm:"size:512;not null" json:"path"`
-	Platform    string     `gorm:"size:50;not null" json:"platform"`      // 平台名称
-	Model       string     `gorm:"size:100;not null" json:"model"`       // 模型名称
-	Prompt      string     `gorm:"size:1000" json:"prompt"`              // 提示词
-	GeneratedAt time.Time  `gorm:"not null" json:"generated_at"`         // 生成时间
-	Status      string     `gorm:"size:20;default:'pending'" json:"status"`
-	Note        string     `gorm:"type:text" json:"note"`
-	ModeratedAt *time.Time `json:"moderated_at"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID           uint       `gorm:"primaryKey" json:"id"`
+	Name         string     `gorm:"size:255;not null" json:"name"`
+	Date         string     `gorm:"size:20;not null" json:"date"`
+	Path         string     `gorm:"size:512;not null" json:"path"`
+	Platform     string     `gorm:"size:50;not null" json:"platform"`
+	Model        string     `gorm:"size:100;not null" json:"model"`
+	Prompt       string     `gorm:"size:1000" json:"prompt"`
+	GeneratedAt  time.Time  `gorm:"not null" json:"generated_at"`
+	Status       string     `gorm:"size:20;default:'pending'" json:"status"`
+	Note         string     `gorm:"type:text" json:"note"`
+	ModeratedAt  *time.Time `json:"moderated_at"`
+	CreatedAt    time.Time  `json:"created_at"`
 }
 
 func (ImageRecord) TableName() string {
@@ -82,6 +102,7 @@ func (ImageRecord) TableName() string {
 // ========== 全局变量 ==========
 var db *gorm.DB
 var cfg *Config
+var pubManager *publisher.Manager
 
 func main() {
 	configPath := flag.String("c", "config/config.yaml", "配置文件")
@@ -106,6 +127,9 @@ func main() {
 	os.MkdirAll(cfg.ImageGen.OutputDir, 0755)
 	setupLogging()
 
+	// 初始化发布管理器
+	pubManager = initPublisher()
+
 	for key, p := range cfg.Platforms {
 		if p.Enabled && p.APIKey != "" {
 			log.Printf("已启用平台: %s - %s", key, p.Name)
@@ -116,18 +140,25 @@ func main() {
 	r := gin.Default()
 	r.LoadHTMLGlob("web/templates/*")
 	r.Static("/static", "./web/static")
+	r.Static("/images", cfg.ImageGen.OutputDir) // 图片目录
 
+	// 页面路由
 	r.GET("/", index)
 	r.GET("/add", addPage)
 	r.GET("/moderate/:id", moderatePage)
 	r.GET("/records", recordsPage)
+	r.GET("/gallery", galleryPage) // 当天图库
 
+	// API 路由
 	r.POST("/api/generate", handleGenerate)
 	r.GET("/api/images", listImages)
 	r.POST("/api/moderate", moderateImage)
 	r.GET("/api/records", listRecords)
 	r.DELETE("/api/images/:id", deleteImage)
 	r.GET("/api/report", dailyReport)
+	r.GET("/api/gallery", getGallery) // 当天图库 API
+	r.POST("/api/publish", handlePublish) // 发布 API
+	r.GET("/api/platforms", listPlatforms) // 平台列表
 
 	log.Printf("🚀 图片平台启动于端口 %s", cfg.Server.Port)
 	r.Run(":" + cfg.Server.Port)
@@ -168,6 +199,18 @@ func recordsPage(c *gin.Context) {
 	c.HTML(http.StatusOK, "records.html", gin.H{"records": records, "total": len(records)})
 }
 
+// ========== 当天图库页面 ==========
+func galleryPage(c *gin.Context) {
+	date := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
+	var records []ImageRecord
+	db.Where("date = ? AND status = ?", date, "approved").Order("generated_at DESC").Find(&records)
+	c.HTML(http.StatusOK, "gallery.html", gin.H{
+		"records": records,
+		"date":    date,
+		"total":   len(records),
+	})
+}
+
 // ========== API 处理 ==========
 func handleGenerate(c *gin.Context) {
 	var req struct {
@@ -200,7 +243,6 @@ func handleGenerate(c *gin.Context) {
 		return
 	}
 
-	// 自动投递审核
 	genTime := time.Now()
 	record := ImageRecord{
 		Name:        result.Filename,
@@ -279,6 +321,76 @@ func dailyReport(c *gin.Context) {
 	})
 }
 
+// ========== 图库 API ==========
+func getGallery(c *gin.Context) {
+	date := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
+	var records []ImageRecord
+	db.Where("date = ? AND status = ?", date, "approved").Order("generated_at DESC").Find(&records)
+	c.JSON(200, gin.H{"records": records, "total": len(records), "date": date})
+}
+
+// ========== 发布 API ==========
+func handlePublish(c *gin.Context) {
+	var req struct {
+		ImageID   uint     `json:"image_id" binding:"required"`
+		Platforms []string `json:"platforms"` // 发布到哪些平台，空表示所有
+		Title     string   `json:"title"`
+		Content   string   `json:"content"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 获取图片信息
+	var record ImageRecord
+	if err := db.First(&record, req.ImageID).Error; err != nil {
+		c.JSON(404, gin.H{"error": "图片不存在"})
+		return
+	}
+
+	if record.Status != "approved" {
+		c.JSON(400, gin.H{"error": "只能发布审核通过的图片"})
+		return
+	}
+
+	ctx := context.Background()
+	results := make(map[string]string)
+
+	// 确定要发布的平台
+	platformsToUse := req.Platforms
+	if len(platformsToUse) == 0 {
+		for _, p := range pubManager.List() {
+			platformsToUse = append(platformsToUse, string(p.Type()))
+		}
+	}
+
+	// 发布到各平台
+	for _, plat := range platformsToUse {
+		url, err := pubManager.Publish(publisher.PlatformType(plat), ctx, record.Path, req.Title, req.Content)
+		if err != nil {
+			results[plat] = "失败: " + err.Error()
+		} else {
+			results[plat] = url
+		}
+	}
+
+	c.JSON(200, gin.H{"message": "success", "results": results})
+}
+
+// ========== 平台列表 API ==========
+func listPlatforms(c *gin.Context) {
+	platforms := pubManager.List()
+	result := make([]map[string]string, 0, len(platforms))
+	for _, p := range platforms {
+		result = append(result, map[string]string{
+			"type": string(p.Type()),
+			"name": p.Name(),
+		})
+	}
+	c.JSON(200, gin.H{"platforms": result})
+}
+
 // ========== 工具函数 ==========
 func loadConfig(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
@@ -321,13 +433,39 @@ func setupLogging() {
 	log.SetOutput(f)
 }
 
+// ========== 初始化发布管理器 ==========
+func initPublisher() *publisher.Manager {
+	mgr := publisher.New()
+
+	// 注册小红书
+	if cfg.Publish.Xiaohongshu.Enabled {
+		mgr.Register(publisher.NewXiaohongshu(
+			cfg.Publish.Xiaohongshu.MCPURL,
+			cfg.Publish.Xiaohongshu.Cookies,
+			cfg.Publish.Xiaohongshu.XSecToken,
+		))
+	}
+
+	// 注册抖音
+	if cfg.Publish.Douyin.Enabled {
+		mgr.Register(publisher.NewDouyin(""))
+	}
+
+	// 注册 B站
+	if cfg.Publish.Bilibili.Enabled {
+		mgr.Register(publisher.NewBilibili("", cfg.Publish.Bilibili.Cookie))
+	}
+
+	return mgr
+}
+
 // ========== 图片生成 ==========
 type GenerateResult struct {
-	Platform  string
-	Model     string
-	Filename  string
-	FilePath  string
-	Success   bool
+	Platform string
+	Model    string
+	Filename string
+	FilePath string
+	Success  bool
 }
 
 func generateImage(platform, prompt string) *GenerateResult {
@@ -369,15 +507,15 @@ func generateImage(platform, prompt string) *GenerateResult {
 	}
 
 	imageURL := result.Data[0].URL
-	
+
 	// 目录结构: outputDir/日期/平台/时间戳.png
 	now := time.Now()
 	dateDir := now.Format("2006-01-02")
 	platformDir := platform
-	
+
 	dir := filepath.Join(cfg.ImageGen.OutputDir, dateDir, platformDir)
 	os.MkdirAll(dir, 0755)
-	
+
 	filename := fmt.Sprintf("%s.png", now.Format("150405"))
 	path := filepath.Join(dir, filename)
 

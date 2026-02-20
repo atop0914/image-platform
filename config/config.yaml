@@ -13,10 +13,6 @@ imageGen:
   logDir: "~/generated_images/logs"
   width: 1024
   height: 2048
-  maxRetries: 3
-  retryDelay: 3
-  timeout: 180
-  maxWorkers: 5
 
 # 平台配置 - API Key 从环境变量自动加载
 platforms:
@@ -35,3 +31,18 @@ platforms:
     model: "dall-e-3"
     enabled: false
     description: "质量最高"
+
+# 发布配置
+publish:
+  xiaohongshu:
+    enabled: false
+    mcpUrl: "http://127.0.0.1:18060/mcp"
+    cookies: ""
+    xSecToken: ""
+  
+  douyin:
+    enabled: false
+  
+  bilibili:
+    enabled: false
+    cookie: ""
