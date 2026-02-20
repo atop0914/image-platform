@@ -6,17 +6,25 @@
     <title>当天图库 - 图片平台</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <style>
-        .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; padding: 20px; }
-        .gallery-card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: transform 0.2s; }
-        .gallery-card:hover { transform: translateY(-4px); box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
-        .gallery-card img { width: 100%; height: 250px; object-fit: cover; }
-        .gallery-card-body { padding: 12px; }
-        .gallery-card-title { font-size: 14px; color: #333; margin-bottom: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-        .gallery-card-meta { font-size: 12px; color: #666; display: flex; gap: 8px; flex-wrap: wrap; }
-        .platform-badge { background: #6366f1; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
-        .model-badge { background: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
-        .publish-btn { width: 100%; margin-top: 8px; }
-        .date-input { padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; }
+        .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px; padding: 24px; }
+        .gallery-card { background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.08); transition: all 0.3s; }
+        .gallery-card:hover { transform: translateY(-6px); box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+        .gallery-card img { width: 100%; height: 280px; object-fit: cover; cursor: pointer; }
+        .gallery-card-body { padding: 16px; }
+        .gallery-card-title { font-size: 14px; color: #1f2937; margin-bottom: 10px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .gallery-card-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+        .platform-badge { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+        .model-badge { background: linear-gradient(135deg, #10b981, #34d399); color: white; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+        .publish-btn { width: 100%; padding: 10px; background: linear-gradient(135deg, #f59e0b, #fbbf24); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .publish-btn:hover { transform: scale(1.02); box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4); }
+        .publish-btn:disabled { background: #9ca3af; cursor: not-allowed; transform: none; }
+        .date-input { padding: 10px 14px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; transition: border-color 0.2s; }
+        .date-input:focus { border-color: #6366f1; outline: none; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; background: white; border-bottom: 1px solid #e5e7eb; }
+        .stats-bar { display: flex; gap: 24px; padding: 16px 24px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; }
+        .stat-item { display: flex; align-items: center; gap: 8px; }
+        .stat-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+        .stat-value { font-size: 20px; font-weight: 700; }
     </style>
 </head>
 <body>
@@ -30,6 +38,7 @@
                 <a href="/" class="nav-item">
                     <span class="nav-icon">📋</span>
                     <span>待审核</span>
+                    <span class="badge" id="pendingBadge">0</span>
                 </a>
                 <a href="/records" class="nav-item">
                     <span class="nav-icon">📊</span>
@@ -46,69 +55,98 @@
             </nav>
         </aside>
 
-        <main class="main">
-            <header class="header">
-                <h1>当天图库</h1>
-                <div class="header-actions">
+        <main class="main" style="margin-left: 240px;">
+            <div class="header">
+                <h1 style="font-size: 24px; font-weight: 700;">📸 当天图库</h1>
+                <div style="display: flex; gap: 12px; align-items: center;">
                     <input type="date" id="datePicker" class="date-input" value="{{ .date }}">
-                    <button class="btn btn-primary" onclick="loadGallery()">查看</button>
-                </div>
-            </header>
-
-            <div class="content">
-                <p style="padding: 20px;">共 {{ .total }} 张审核通过的图片</p>
-                <div class="gallery-grid" id="galleryGrid">
-                    {{ range .records }}
-                    <div class="gallery-card">
-                        <img src="{{ .Path }}" alt="{{ .Name }}">
-                        <div class="gallery-card-body">
-                            <div class="gallery-card-title" title="{{ .Prompt }}">{{ .Prompt }}</div>
-                            <div class="gallery-card-meta">
-                                <span class="platform-badge">{{ .Platform }}</span>
-                                <span class="model-badge">{{ .Model }}</span>
-                            </div>
-                            <button class="btn btn-primary publish-btn" onclick="publishImage({{ .ID }})">📤 发布</button>
-                        </div>
-                    </div>
-                    {{ end }}
+                    <button class="btn btn-primary" onclick="loadGallery()">🔍 查看</button>
                 </div>
             </div>
+
+            <div class="stats-bar">
+                <div class="stat-item">
+                    <div class="stat-icon" style="background: #dbeafe;">🖼️</div>
+                    <div>
+                        <div class="stat-value" style="color: #2563eb;">{{ .total }}</div>
+                        <div style="font-size: 12px; color: #6b7280;">图片总数</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="gallery-grid" id="galleryGrid">
+                {{ range .records }}
+                <div class="gallery-card">
+                    <img src="{{ .Path }}" alt="{{ .Name }}" onclick="previewImage('{{ .Path }}')">
+                    <div class="gallery-card-body">
+                        <div class="gallery-card-title" title="{{ .Prompt }}">{{ .Prompt }}</div>
+                        <div class="gallery-card-meta">
+                            <span class="platform-badge">{{ .Platform }}</span>
+                            <span class="model-badge">{{ .Model }}</span>
+                        </div>
+                        <button class="publish-btn" onclick="publishImage({{ .ID }}, '{{ .Prompt }}')">📤 一键发布</button>
+                    </div>
+                </div>
+                {{ end }}
+            </div>
+            
+            {{ if eq .total 0 }}
+            <div style="text-align: center; padding: 60px; color: #9ca3af;">
+                <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
+                <div style="font-size: 18px;">当天还没有审核通过的图片</div>
+            </div>
+            {{ end }}
         </main>
     </div>
 
     <!-- 发布弹窗 -->
-    <div id="publishModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); align-items:center; justify-content:center;">
-        <div style="background:white; padding:24px; border-radius:12px; width:400px; max-width:90%;">
-            <h3>📤 发布图片</h3>
+    <div id="publishModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); align-items:center; justify-content:center; z-index: 1000;">
+        <div style="background:white; padding:28px; border-radius:16px; width:480px; max-width:95%; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+            <h2 style="margin: 0 0 20px 0; font-size: 20px;">📤 发布到多平台</h2>
+            
             <div class="form-group">
-                <label>标题</label>
-                <input type="text" id="publishTitle" class="input" placeholder="输入标题">
+                <label style="display:block; margin-bottom:6px; font-weight:500; color:#374151;">标题</label>
+                <input type="text" id="publishTitle" class="input" placeholder="输入标题（可选）" style="width:100%; box-sizing:border-box;">
             </div>
+            
             <div class="form-group">
-                <label>内容</label>
-                <textarea id="publishContent" class="textarea" rows="4" placeholder="输入正文内容"></textarea>
+                <label style="display:block; margin-bottom:6px; font-weight:500; color:#374151;">正文内容</label>
+                <textarea id="publishContent" class="textarea" rows="4" placeholder="输入正文内容（可选）" style="width:100%; box-sizing:border-box;"></textarea>
             </div>
+            
             <div class="form-group">
-                <label>发布平台</label>
-                <div id="platformList"></div>
+                <label style="display:block; margin-bottom:8px; font-weight:500; color:#374151;">选择平台</label>
+                <div id="platformList" style="display:flex; flex-wrap:wrap; gap:10px;"></div>
             </div>
-            <div style="display:flex; gap:8px; justify-content:flex-end;">
-                <button class="btn btn-default" onclick="closePublishModal()">取消</button>
-                <button class="btn btn-primary" onclick="confirmPublish()">发布</button>
+            
+            <!-- 发布结果 -->
+            <div id="publishResult" style="display:none; margin-top: 16px; padding: 16px; border-radius: 12px; background: #f9fafb;">
+                <div style="font-weight: 600; margin-bottom: 12px;">📊 发布结果</div>
+                <div id="resultList"></div>
+            </div>
+            
+            <div style="display:flex; gap:12px; justify-content:flex-end; margin-top: 20px;">
+                <button class="btn btn-default" onclick="closePublishModal()" id="cancelBtn">取消</button>
+                <button class="btn btn-primary" onclick="confirmPublish()" id="publishBtn">🚀 立即发布</button>
             </div>
         </div>
     </div>
 
+    <!-- 图片预览 -->
+    <div id="previewModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.9); align-items:center; justify-content:center; z-index: 1001;" onclick="this.style.display='none'">
+        <img id="previewImg" style="max-width:90%; max-height:90%; border-radius:8px;">
+    </div>
+
     <script>
         let currentImageId = null;
+        let currentPrompt = '';
         let availablePlatforms = [];
 
-        // 加载平台列表
         async function loadPlatforms() {
             try {
                 const res = await fetch('/api/platforms');
                 const data = await res.json();
-                availablePlatforms = data.platforms;
+                availablePlatforms = data.platforms || [];
                 renderPlatforms();
             } catch (e) {
                 console.error(e);
@@ -118,12 +156,13 @@
         function renderPlatforms() {
             const container = document.getElementById('platformList');
             if (availablePlatforms.length === 0) {
-                container.innerHTML = '<p style="color:#666;">暂无可用平台</p>';
+                container.innerHTML = '<span style="color:#9ca3af;">暂无可用发布平台，请配置</span>';
                 return;
             }
             container.innerHTML = availablePlatforms.map(p => 
-                `<label style="display:inline-flex; align-items:center; gap:4px; margin-right:12px;">
-                    <input type="checkbox" value="${p.type}" checked> ${p.name}
+                `<label style="display:inline-flex; align-items:center; gap:6px; padding:8px 14px; background:#f3f4f6; border-radius:20px; cursor:pointer; transition:all 0.2s;">
+                    <input type="checkbox" value="${p.type}" checked style="accent-color:#6366f1;">
+                    <span>${p.name}</span>
                 </label>`
             ).join('');
         }
@@ -133,8 +172,17 @@
             location.href = '/gallery?date=' + date;
         }
 
-        function publishImage(id) {
+        function previewImage(src) {
+            document.getElementById('previewImg').src = src;
+            document.getElementById('previewModal').style.display = 'flex';
+        }
+
+        function publishImage(id, prompt) {
             currentImageId = id;
+            currentPrompt = prompt || '';
+            document.getElementById('publishTitle').value = currentPrompt.slice(0, 50);
+            document.getElementById('publishContent').value = '';
+            document.getElementById('publishResult').style.display = 'none';
             document.getElementById('publishModal').style.display = 'flex';
         }
 
@@ -148,9 +196,17 @@
 
             const title = document.getElementById('publishTitle').value;
             const content = document.getElementById('publishContent').value;
-            
-            // 获取选中的平台
             const platforms = Array.from(document.querySelectorAll('#platformList input:checked')).map(cb => cb.value);
+
+            if (platforms.length === 0) {
+                alert('请至少选择一个发布平台');
+                return;
+            }
+
+            // 显示加载状态
+            const btn = document.getElementById('publishBtn');
+            btn.disabled = true;
+            btn.textContent = '发布中...';
 
             try {
                 const res = await fetch('/api/publish', {
@@ -165,18 +221,30 @@
                 });
                 const data = await res.json();
                 
-                if (res.ok) {
-                    let msg = '发布结果:\n';
-                    for (const [platform, result] of Object.entries(data.results)) {
-                        msg += `${platform}: ${result}\n`;
-                    }
-                    alert(msg);
-                    closePublishModal();
-                } else {
-                    alert('发布失败: ' + data.error);
+                // 显示结果
+                const resultDiv = document.getElementById('publishResult');
+                const resultList = document.getElementById('resultList');
+                resultDiv.style.display = 'block';
+                
+                let successCount = 0;
+                let html = '';
+                for (const [platform, result] of Object.entries(data.results || {})) {
+                    const isSuccess = !result.startsWith('失败');
+                    if (isSuccess) successCount++;
+                    html += `<div style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid #e5e7eb;">
+                        <span style="font-size:18px;">${isSuccess ? '✅' : '❌'}</span>
+                        <span style="font-weight:500;">${platform}:</span>
+                        <span style="color:${isSuccess ? '#10b981' : '#ef4444'}; flex:1;">${result}</span>
+                    </div>`;
                 }
+                resultList.innerHTML = html;
+                
+                btn.textContent = successCount === platforms.length ? '🎉 全部成功' : '⚠️ 部分失败';
+
             } catch (e) {
                 alert('发布失败: ' + e.message);
+                btn.disabled = false;
+                btn.textContent = '🚀 立即发布';
             }
         }
 
