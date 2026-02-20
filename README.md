@@ -4,10 +4,11 @@
 
 ## 功能特性
 
-- 🤖 **多平台图片生成**: 支持 SiliconFlow、OpenAI 等多种模型提供商
+- 🤖 **多平台图片生成**: 支持 SiliconFlow、阿里云百炼 等多种模型提供商
 - 📥 **自动入库**: 生成图片自动添加到审核队列
 - ✅ **人工审核**: Web 界面审核通过/拒绝
-- 📊 **数据统计**: 每日审核报告 API
+- 📸 **当天图库**: 查看审核通过的图片
+- 📤 **一键发布**: 发布到小红书、抖音、B站等平台
 
 ## 快速开始
 
@@ -19,12 +20,6 @@ cd image-platform
 ```
 
 ### 2. 配置
-
-复制配置示例并修改:
-
-```bash
-cp config/config.yaml config/config.yaml.bak
-```
 
 编辑 `config/config.yaml`:
 
@@ -52,7 +47,16 @@ platforms:
     envKey: "SILICONFLOW_API_KEY"
     url: "https://api.siliconflow.cn/v1"
     model: "Kwai-Kolors/Kolors"
-    enabled: false
+    enabled: true
+    description: "Kolors 模型，性价比高"
+
+  aliyun:
+    name: "阿里云百炼"
+    envKey: "ALIYUN_API_KEY"
+    url: "https://dashscope.aliyuncs.com/api/v1"
+    model: "wanx-v1"
+    enabled: true
+    description: "通义万相，国内稳定"
 
   openai:
     name: "OpenAI DALL-E 3"
@@ -60,100 +64,138 @@ platforms:
     url: "https://api.openai.com/v1"
     model: "dall-e-3"
     enabled: false
+    description: "质量最高，需要国外支付"
 ```
 
-### 3. 创建数据库
+### 3. 环境变量
+
+在系统环境变量或 `.env` 文件中配置 API Key:
+
+```bash
+# 硅基流动
+export SILICONFLOW_API_KEY='your-key'
+
+# 阿里云百炼
+export ALIYUN_API_KEY='your-key'
+
+# OpenAI
+export OPENAI_API_KEY='your-key'
+```
+
+### 4. 创建数据库
 
 ```sql
 CREATE DATABASE image_platform;
 ```
 
-### 4. 运行
+### 5. 运行
 
 ```bash
-# 方式一: 直接运行
-export SILICONFLOW_API_KEY='your-api-key'
+# 编译
+go build -o image-platform ./cmd/server
+
+# 运行
 ./image-platform -c config/config.yaml
-
-# 方式二: Docker
-docker run -d -p 8081:8081 \
-  -e SILICONFLOW_API_KEY='your-api-key' \
-  -v ./config:/app/config \
-  -v ./generated_images:/app/generated_images \
-  image-platform
 ```
 
-### 5. 访问
+访问 http://localhost:8081
 
-- Web 界面: http://localhost:8081
-- 首页: 待审核图片列表
-- 添加: http://localhost:8081/add
-- 审核: http://localhost:8081/moderate/:id
-- 记录: http://localhost:8081/records
+## API 接口
 
-## API
-
-### 生成图片
+### 1. 平台列表
 
 ```bash
-curl -X POST http://localhost:8081/api/generate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "一只可爱的橘猫",
-    "platform": "siliconflow"
-  }'
+GET /api/platforms
 ```
 
-响应:
+响应：
+```json
+{
+  "platforms": [
+    {
+      "id": "siliconflow",
+      "name": "硅基流动",
+      "model": "Kwai-Kolors/Kolors",
+      "description": "Kolors 模型，性价比高",
+      "enabled": true
+    }
+  ]
+}
+```
+
+### 2. 生成图片
+
+```bash
+POST /api/generate
+Content-Type: application/json
+
+{
+  "prompt": "A cute cat sitting on a chair",
+  "platform": "siliconflow"  // 必选：siliconflow, aliyun
+}
+```
+
+响应：
 ```json
 {
   "message": "success",
-  "filePath": "/home/user/generated_images/20260220_120000_一只可爱的橘猫/siliconflow_123456.png",
-  "platform": "硅基流动"
+  "filePath": "~/generated_images/2026-02-20/siliconflow/215654.png",
+  "platform": "硅基流动",
+  "model": "Kwai-Kolors/Kolors"
 }
 ```
 
-### 图片列表
+### 3. 图片列表
 
 ```bash
-curl http://localhost:8081/api/images?status=all
+GET /api/images?status=all  # all, pending, approved, rejected
 ```
 
-### 审核图片
+### 4. 审核图片
 
 ```bash
-curl -X POST http://localhost:8081/api/moderate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "id": 1,
-    "status": "approved",
-    "note": "质量很好"
-  }'
-```
+POST /api/moderate
+Content-Type: application/json
 
-### 每日报告
-
-```bash
-curl http://localhost:8081/api/report?date=2026-02-20
-```
-
-响应:
-```json
 {
-  "date": "2026-02-20",
-  "total": 10,
-  "approved": 7,
-  "rejected": 2,
-  "pending": 1,
-  "images": [...]
+  "id": 1,
+  "status": "approved",  // approved, rejected
+  "note": "质量很好"
 }
+```
+
+### 5. 当天图库
+
+```bash
+GET /api/gallery?date=2026-02-20
+```
+
+### 6. 发布图片
+
+```bash
+POST /api/publish
+Content-Type: application/json
+
+{
+  "image_id": 1,
+  "platforms": ["xiaohongshu", "douyin"],  // 发布到哪些平台
+  "title": "标题",
+  "content": "正文内容"
+}
+```
+
+### 7. 每日报告
+
+```bash
+GET /api/report?date=2026-02-20
 ```
 
 ## 支持的平台
 
 | 平台 | 模型 | 说明 |
 |------|------|------|
-| SiliconFlow | Kolors | 国内首选，稳定 |
+| 硅基流动 | Kolors | 国内首选，性价比高 |
+| 阿里云百炼 | 通义万相 (wanx-v1) | 国内稳定，阿里云 |
 | OpenAI | DALL-E 3 | 质量最高 |
 
 ## 目录结构
@@ -163,29 +205,23 @@ image-platform/
 ├── cmd/server/main.go   # 主服务入口
 ├── config/              # 配置文件
 ├── internal/
-│   ├── generator/       # 图片生成模块
-│   └── moderation/      # 审核模块
+│   └── publisher/       # 发布模块
 ├── web/                 # 前端资源
 │   ├── templates/       # HTML 模板
-│   ├── css/            # 样式
-│   └── js/             # 脚本
+│   ├── css/           # 样式
+│   └── js/            # 脚本
 ├── go.mod
 ├── go.sum
-└── image-platform       # 编译好的二进制
+└── image-platform      # 编译好的二进制
 ```
 
-## 开发
+## Web 界面
 
-```bash
-# 编译
-go build -o image-platform ./cmd/server
-
-# 运行测试
-go test ./...
-
-# 代码格式化
-go fmt ./...
-```
+- **首页** `/` - 待审核图片列表
+- **添加** `/add` - 手动添加图片
+- **审核** `/moderate/:id` - 审核详情
+- **记录** `/records` - 审核历史
+- **图库** `/gallery` - 当天通过的图片
 
 ## License
 
