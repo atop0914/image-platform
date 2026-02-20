@@ -131,7 +131,9 @@ Content-Type: application/json
 
 {
   "prompt": "A cute cat sitting on a chair",
-  "platform": "siliconflow"  // 必选：siliconflow, aliyun
+  "platform": "siliconflow",  // 必选：siliconflow, aliyun, modelscope
+  "size": "1920x1080",        // 可选：图片尺寸，如 "1920x1080", "2048x2048"
+  "model": "Tongyi-MAI/Z-Image-Turbo"  // 可选：指定模型，覆盖默认模型
 }
 ```
 
@@ -144,6 +146,12 @@ Content-Type: application/json
   "model": "Kwai-Kolors/Kolors"
 }
 ```
+
+**支持的自定义模型：**
+
+| 平台 | 可用模型 |
+|------|----------|
+| 魔塔社区 | `Tongyi-MAI/Z-Image-Turbo` (默认), `Qwen/Qwen-Image`, `MusePublic/489_ckpt_FLUX_1` |
 
 ### 3. 图片列表
 
@@ -196,6 +204,7 @@ GET /api/report?date=2026-02-20
 |------|------|------|
 | 硅基流动 | Kolors | 国内首选，性价比高 |
 | 阿里云百炼 | 通义万相 (wanx-v1) | 国内稳定，阿里云 |
+| 魔塔社区 | 通义万相Turbo (Z-Image-Turbo) | 免费额度，速度快 |
 | OpenAI | DALL-E 3 | 质量最高 |
 
 ## 目录结构
