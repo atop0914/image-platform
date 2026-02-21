@@ -3,166 +3,277 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>审核记录 - 图片审核平台</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <title>审核记录 - AI图片审核平台</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
-        .table-image img { width: 80px; height: 80px; object-fit: cover; border-radius: 4px; }
-        .platform-badge { background: #6366f1; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
-        .model-badge { background: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
-        .prompt-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        :root {
+            --primary: #1a365d;
+            --primary-light: #2c5282;
+            --accent: #c53030;
+            --bg-main: #f7fafc;
+            --bg-card: #ffffff;
+            --bg-sidebar: #1a202c;
+            --text-primary: #1a202c;
+            --text-secondary: #4a5568;
+            --text-muted: #718096;
+            --text-light: #e2e8f0;
+            --border: #e2e8f0;
+            --success: #276749;
+            --warning: #c05621;
+            --danger: #c53030;
+            --shadow: 0 1px 3px rgba(0,0,0,0.12);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-main);
+            color: var(--text-primary);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 260px;
+            background: var(--bg-sidebar);
+            color: var(--text-light);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+        }
+
+        .sidebar-header { padding: 24px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+
+        .logo { display: flex; align-items: center; gap: 12px; }
+
+        .logo-icon {
+            width: 40px; height: 40px;
+            background: linear-gradient(135deg, #3182ce, #63b3ed);
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 18px;
+        }
+
+        .logo-text { font-size: 18px; font-weight: 500; }
+        .logo-subtitle { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+        .sidebar-nav { flex: 1; padding: 16px 0; }
+
+        .nav-item {
+            display: flex; align-items: center; gap: 12px;
+            padding: 14px 24px; color: var(--text-muted);
+            text-decoration: none; transition: all 0.2s;
+            border-left: 3px solid transparent;
+        }
+
+        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text-light); }
+        .nav-item.active { background: rgba(49,130,206,0.15); color: #63b3ed; border-left-color: #63b3ed; }
+        .nav-icon { width: 20px; text-align: center; }
+
+        .main { flex: 1; margin-left: 260px; padding: 32px; }
+
+        .page-header { margin-bottom: 32px; }
+
+        .page-title { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+        .page-subtitle { color: var(--text-secondary); font-size: 14px; }
+
+        .stats-row {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        .stat-item {
+            background: var(--bg-card);
+            padding: 16px 24px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        }
+
+        .stat-label { font-size: 12px; color: var(--text-muted); }
+        .stat-value { font-size: 24px; font-weight: 700; }
+
+        .content-card {
+            background: var(--bg-card);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .card-title { font-size: 16px; font-weight: 600; }
+
+        .table-wrapper { overflow-x: auto; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 14px 20px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--bg-main);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td { font-size: 14px; }
+
+        tr:hover { background: var(--bg-main); }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-badge.approved { background: #c6f6d5; color: #276749; }
+        .status-badge.rejected { background: #fed7d7; color: #c53030; }
+        .status-badge.pending { background: #feebc8; color: #c05621; }
+
+        .image-cell {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .image-cell img {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+
+        .action-btn {
+            padding: 6px 12px;
+            font-size: 12px;
+            background: var(--bg-main);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            color: var(--text-secondary);
+            display: inline-block;
+        }
+
+        .action-btn:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
     </style>
 </head>
 <body>
-    <div class="app">
-        <aside class="sidebar">
+    <aside class="sidebar">
+        <div class="sidebar-header">
             <div class="logo">
-                <span class="logo-icon">🖼️</span>
-                <span class="logo-text">图片审核</span>
-            </div>
-            <nav class="nav">
-                <a href="/" class="nav-item">
-                    <span class="nav-icon">📋</span>
-                    <span>待审核</span>
-                </a>
-                <a href="/records" class="nav-item active">
-                    <span class="nav-icon">📊</span>
-                    <span>审核记录</span>
-                </a>
-                <a href="/add" class="nav-item">
-                    <span class="nav-icon">➕</span>
-                    <span>添加图片</span>
-                </a>
-            </nav>
-        </aside>
-
-        <main class="main">
-            <header class="header">
-                <h1>审核记录</h1>
-                <div class="header-actions">
-                    <select id="statusFilter" class="select" onchange="filterRecords()">
-                        <option value="all">全部</option>
-                        <option value="approved">已通过</option>
-                        <option value="rejected">已拒绝</option>
-                    </select>
-                </div>
-            </header>
-
-            <div class="content">
-                <div class="records-table-container">
-                    <table class="records-table">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>图片</th>
-                                <th>提示词</th>
-                                <th>平台</th>
-                                <th>模型</th>
-                                <th>生成时间</th>
-                                <th>状态</th>
-                                <th>备注</th>
-                                <th>审核时间</th>
-                                <th>操作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="recordsBody">
-                            <!-- 数据将通过 JS 渲染 -->
-                        </tbody>
-                    </table>
-                    <div class="empty-state" id="emptyState" style="display: none;">
-                        <div class="empty-icon">📭</div>
-                        <p>暂无审核记录</p>
-                    </div>
+                <div class="logo-icon">AI</div>
+                <div>
+                    <div class="logo-text">图片审核平台</div>
+                    <div class="logo-subtitle">生产环境控制台</div>
                 </div>
             </div>
-        </main>
-    </div>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="/" class="nav-item">
+                <span class="nav-icon">◉</span>
+                <span>待审核</span>
+            </a>
+            <a href="/gallery" class="nav-item">
+                <span class="nav-icon">◈</span>
+                <span>图库管理</span>
+            </a>
+            <a href="/records" class="nav-item active">
+                <span class="nav-icon">◧</span>
+                <span>审核记录</span>
+            </a>
+            <a href="/add" class="nav-item">
+                <span class="nav-icon">✦</span>
+                <span>生成图片</span>
+            </a>
+        </nav>
+    </aside>
 
-    <script>
-        let allRecords = [];
+    <main class="main">
+        <div class="page-header">
+            <h1 class="page-title">审核记录</h1>
+            <p class="page-subtitle">所有图片审核历史记录</p>
+        </div>
 
-        async function loadRecords() {
-            try {
-                const res = await fetch('/api/records');
-                const data = await res.json();
-                allRecords = data.records;
-                renderRecords(allRecords);
-            } catch (e) {
-                console.error(e);
-            }
-        }
+        <div class="stats-row">
+            <div class="stat-item">
+                <div class="stat-label">总记录数</div>
+                <div class="stat-value">{{ .total }}</div>
+            </div>
+        </div>
 
-        function filterRecords() {
-            const status = document.getElementById('statusFilter').value;
-            if (status === 'all') {
-                renderRecords(allRecords);
-            } else {
-                const filtered = allRecords.filter(r => r.status === status);
-                renderRecords(filtered);
-            }
-        }
-
-        function formatTime(timestamp) {
-            if (!timestamp) return '-';
-            const d = new Date(timestamp);
-            return d.toLocaleString('zh-CN', { 
-                year: 'numeric', month: '2-digit', day: '2-digit', 
-                hour: '2-digit', minute: '2-digit', second: '2-digit' 
-            });
-        }
-
-        function renderRecords(records) {
-            const tbody = document.getElementById('recordsBody');
-            const empty = document.getElementById('emptyState');
-
-            if (records.length === 0) {
-                tbody.innerHTML = '';
-                empty.style.display = 'flex';
-                return;
-            }
-
-            empty.style.display = 'none';
-            
-            tbody.innerHTML = records.map(r => `
-                <tr>
-                    <td>${r.id}</td>
-                    <td>
-                        <div class="table-image">
-                            <img src="${r.path}" alt="" onerror="this.style.display='none'">
-                        </div>
-                    </td>
-                    <td class="prompt-cell" title="${r.prompt || ''}">${r.prompt || '-'}</td>
-                    <td><span class="platform-badge">${r.platform || '-'}</span></td>
-                    <td><span class="model-badge">${r.model || '-'}</td>
-                    <td>${formatTime(r.generated_at)}</td>
-                    <td>
-                        <span class="status-badge ${r.status}">
-                            ${r.status === 'approved' ? '✅ 通过' : r.status === 'rejected' ? '❌ 拒绝' : '⏳ 待审核'}
-                        </span>
-                    </td>
-                    <td class="note-cell">${r.note || '-'}</td>
-                    <td>${formatTime(r.moderated_at)}</td>
-                    <td>
-                        ${r.status === 'pending' ? `<button class="btn btn-primary btn-sm" onclick="location.href='/moderate/${r.id}'">审核</button>` : ''}
-                        <button class="btn btn-default btn-sm" onclick="deleteRecord(${r.id})">🗑️</button>
-                    </td>
-                </tr>
-            `).join('');
-        }
-
-        async function deleteRecord(id) {
-            if (!confirm('确定删除这条记录吗？')) return;
-            
-            try {
-                const res = await fetch('/api/images/' + id, {method: 'DELETE'});
-                if (res.ok) {
-                    loadRecords();
-                }
-            } catch (e) {
-                alert('删除失败');
-            }
-        }
-
-        loadRecords();
-    </script>
+        <div class="content-card">
+            <div class="card-header">
+                <span class="card-title">审核记录 ({{ .total }})</span>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>图片</th>
+                            <th>平台</th>
+                            <th>模型</th>
+                            <th>状态</th>
+                            <th>生成时间</th>
+                            <th>审核时间</th>
+                            <th>备注</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .records }}
+                        <tr>
+                            <td>
+                                <div class="image-cell">
+                                    <img src="{{ .ImageUrl }}" alt="{{ .Name }}">
+                                    <span>{{ .Name }}</span>
+                                </div>
+                            </td>
+                            <td>{{ .Platform }}</td>
+                            <td>{{ .Model }}</td>
+                            <td>
+                                <span class="status-badge {{ .Status }}">{{ .Status }}</span>
+                            </td>
+                            <td>{{ .GeneratedAt.Format "01-02 15:04" }}</td>
+                            <td>
+                                {{ if .ModeratedAt }}
+                                {{ .ModeratedAt.Format "01-02 15:04" }}
+                                {{ else }}
+                                -
+                                {{ end }}
+                            </td>
+                            <td>{{ .Note }}</td>
+                            <td>
+                                <a href="/moderate/{{ .ID }}" class="action-btn">查看</a>
+                            </td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
 </body>
 </html>

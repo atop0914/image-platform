@@ -100,6 +100,60 @@ func (ImageRecord) TableName() string {
 	return "images"
 }
 
+// ========== 用户设置模型 ==========
+type UserSettings struct {
+	ID        uint      `gorm:"primaryKey"`
+	Platform  string    `gorm:"size:50;default:'siliconflow'" json:"platform"`
+	Model     string    `gorm:"size:100" json:"model"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (UserSettings) TableName() string {
+	return "user_settings"
+}
+
+// 获取或创建设置
+func getOrCreateSettings() *UserSettings {
+	var settings UserSettings
+	if err := db.First(&settings).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			settings = UserSettings{Platform: "siliconflow", Model: ""}
+			db.Create(&settings)
+		}
+	}
+	return &settings
+}
+
+// 获取所有可用平台（带模型列表）
+func getPlatformsInfo() []map[string]interface{} {
+	platforms := []map[string]interface{}{}
+	for key, p := range cfg.Platforms {
+		if p.Enabled {
+			models := []string{}
+			if p.Model != "" {
+				models = append(models, p.Model)
+			}
+			switch key {
+			case "siliconflow":
+				models = []string{"", "black-forest-labs/FLUX.1-schnell", "black-forest-labs/FLUX.1-dev", "Kwai-Kolors/Kolors", "Tongyi-MAI/Z-Image-Turbo"}
+			case "modelscope":
+				models = []string{"", "Tongyi-MAI/Z-Image-Turbo", "Kwai-Kolors/Kolors"}
+			case "aliyun":
+				models = []string{"", "wanx-v1"}
+			}
+			platforms = append(platforms, map[string]interface{}{
+				"id":          key,
+				"name":        p.Name,
+				"description": p.Description,
+				"enabled":     p.Enabled && p.APIKey != "",
+				"models":      models,
+			})
+		}
+	}
+	return platforms
+}
+
 // ========== 全局变量 ==========
 var db *gorm.DB
 var cfg *Config
@@ -124,7 +178,7 @@ func main() {
 		log.Fatalf("连接数据库失败: %v", err)
 	}
 
-	db.AutoMigrate(&ImageRecord{})
+	db.AutoMigrate(&ImageRecord{}, &UserSettings{})
 	os.MkdirAll(cfg.ImageGen.OutputDir, 0755)
 	setupLogging()
 
@@ -160,6 +214,9 @@ func main() {
 	r.GET("/api/gallery", getGallery) // 当天图库 API
 	r.POST("/api/publish", handlePublish) // 发布 API
 	r.GET("/api/platforms", listPlatforms) // 平台列表
+	r.GET("/api/settings", getSettings)
+	r.GET("/api/fix-paths", fixImagePaths)
+	r.POST("/api/settings", updateSettings)
 
 	log.Printf("🚀 图片平台启动于端口 %s", cfg.Server.Port)
 	r.Run(":" + cfg.Server.Port)
@@ -172,8 +229,23 @@ func index(c *gin.Context) {
 	db.Where("status = ?", "approved").Limit(100).Find(&approved)
 	db.Where("status = ?", "rejected").Limit(100).Find(&rejected)
 
+	// 添加ImageUrl字段
+	type ImageWithURL struct {
+		ImageRecord
+		ImageUrl string `json:"imageUrl"`
+	}
+	
+	convert := func(records []ImageRecord) []ImageWithURL {
+		result := make([]ImageWithURL, len(records))
+		for i, r := range records {
+			result[i].ImageRecord = r
+			result[i].ImageUrl = "/images" + strings.TrimPrefix(r.Path, "/home/zhuyitao/generated_images")
+		}
+		return result
+	}
+
 	c.HTML(http.StatusOK, "index.html", gin.H{
-		"records":      pending,
+		"records":      convert(pending),
 		"total":        len(pending),
 		"approved":     len(approved),
 		"rejected":     len(rejected),
@@ -191,13 +263,25 @@ func moderatePage(c *gin.Context) {
 		c.String(http.StatusNotFound, "Image not found")
 		return
 	}
-	c.HTML(http.StatusOK, "moderate.html", gin.H{"record": record})
+	imageUrl := "/images" + strings.TrimPrefix(record.Path, "/home/zhuyitao/generated_images")
+	c.HTML(http.StatusOK, "moderate.html", gin.H{"record": record, "imageUrl": imageUrl})
 }
 
 func recordsPage(c *gin.Context) {
 	var records []ImageRecord
 	db.Order("generated_at DESC").Limit(100).Find(&records)
-	c.HTML(http.StatusOK, "records.html", gin.H{"records": records, "total": len(records)})
+	
+	type ImageWithURL struct {
+		ImageRecord
+		ImageUrl string `json:"imageUrl"`
+	}
+	result := make([]ImageWithURL, len(records))
+	for i, r := range records {
+		result[i].ImageRecord = r
+		result[i].ImageUrl = "/images" + strings.TrimPrefix(r.Path, "/home/zhuyitao/generated_images")
+	}
+	
+	c.HTML(http.StatusOK, "records.html", gin.H{"records": result, "total": len(records)})
 }
 
 // ========== 当天图库页面 ==========
@@ -205,8 +289,19 @@ func galleryPage(c *gin.Context) {
 	date := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
 	var records []ImageRecord
 	db.Where("date = ? AND status = ?", date, "approved").Order("generated_at DESC").Find(&records)
+	
+	type ImageWithURL struct {
+		ImageRecord
+		ImageUrl string `json:"imageUrl"`
+	}
+	result := make([]ImageWithURL, len(records))
+	for i, r := range records {
+		result[i].ImageRecord = r
+		result[i].ImageUrl = "/images" + strings.TrimPrefix(r.Path, "/home/zhuyitao/generated_images")
+	}
+	
 	c.HTML(http.StatusOK, "gallery.html", gin.H{
-		"records": records,
+		"records": result,
 		"date":    date,
 		"total":   len(records),
 	})
@@ -216,12 +311,28 @@ func galleryPage(c *gin.Context) {
 func handleGenerate(c *gin.Context) {
 	var req struct {
 		Prompt   string `json:"prompt" binding:"required"`
-		Platform string `json:"platform" binding:"required"` // 必选
-		Size     string `json:"size"`                        // 可选，如 "1920x1080"
-		Model    string `json:"model"`                       // 可选，指定模型
+		Platform string `json:"platform"` // 可选，未指定则使用用户设置
+		Size     string `json:"size"`      // 可选，如 "1920x1080"
+		Model    string `json:"model"`     // 可选，指定模型
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": "请指定平台: " + err.Error()})
+		c.JSON(400, gin.H{"error": "请输入描述词: " + err.Error()})
+		return
+	}
+
+	// 如果未指定平台，使用用户默认设置
+	if req.Platform == "" {
+		settings := getOrCreateSettings()
+		req.Platform = settings.Platform
+	}
+	if req.Model == "" {
+		settings := getOrCreateSettings()
+		req.Model = settings.Model
+	}
+
+	// 验证平台
+	if req.Platform == "" {
+		c.JSON(400, gin.H{"error": "请指定平台或在设置中选择默认平台"})
 		return
 	}
 
@@ -256,7 +367,18 @@ func listImages(c *gin.Context) {
 		query = query.Where("status = ?", s)
 	}
 	query.Order("generated_at DESC").Limit(100).Find(&records)
-	c.JSON(200, gin.H{"records": records, "total": len(records)})
+	
+	// 转换路径为URL
+	type ImageRecordWithURL struct {
+		ImageRecord
+		ImageURL string `json:"imageUrl"`
+	}
+	result := make([]ImageRecordWithURL, len(records))
+	for i, r := range records {
+		result[i].ImageRecord = r
+		result[i].ImageURL = "/images" + strings.TrimPrefix(r.Path, "/home/zhuyitao/generated_images")
+	}
+	c.JSON(200, gin.H{"records": result, "total": len(records)})
 }
 
 func moderateImage(c *gin.Context) {
@@ -370,18 +492,43 @@ func handlePublish(c *gin.Context) {
 
 // ========== 平台列表 API ==========
 func listPlatforms(c *gin.Context) {
-	platforms := getEnabledPlatforms()
-	result := make([]map[string]interface{}, 0, len(platforms))
-	for key, p := range platforms {
-		result = append(result, map[string]interface{}{
-			"id":          key,
-			"name":        p.Name,
-			"model":       p.Model,
-			"description": p.Description,
-			"enabled":     p.Enabled,
-		})
+	platforms := getPlatformsInfo()
+	c.JSON(200, platforms)
+}
+
+// ========== Settings API ==========
+func getSettings(c *gin.Context) {
+	settings := getOrCreateSettings()
+	c.JSON(200, gin.H{
+		"platform": settings.Platform,
+		"model":     settings.Model,
+	})
+}
+
+func updateSettings(c *gin.Context) {
+	var req struct {
+		Platform string `json:"platform"`
+		Model    string `json:"model"`
 	}
-	c.JSON(200, gin.H{"platforms": result})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	settings := getOrCreateSettings()
+	if req.Platform != "" {
+		if p, ok := cfg.Platforms[req.Platform]; !ok || !p.Enabled || p.APIKey == "" {
+			c.JSON(400, gin.H{"error": "平台不可用或未配置"})
+			return
+		}
+		settings.Platform = req.Platform
+	}
+	if req.Model != "" {
+		settings.Model = req.Model
+	}
+	db.Save(settings)
+
+	c.JSON(200, gin.H{"message": "设置已更新", "platform": settings.Platform, "model": settings.Model})
 }
 
 // ========== 工具函数 ==========
@@ -718,4 +865,22 @@ func downloadAndSave(p PlatformConfig, platform, imageURL string) *GenerateResul
 		FilePath: path,
 		Success:  true,
 	}
+}
+
+// ========== 修复图片路径 ==========
+func fixImagePaths(c *gin.Context) {
+	var images []ImageRecord
+	db.Find(&images)
+	
+	homeDir := "/home/zhuyitao"
+	fixed := 0
+	for _, img := range images {
+		if strings.HasPrefix(img.Path, "~/") {
+			newPath := strings.Replace(img.Path, "~", homeDir, 1)
+			db.Model(&img).Update("path", newPath)
+			fixed++
+		}
+	}
+	
+	c.JSON(200, gin.H{"message": "已修复 " + fmt.Sprintf("%d", fixed) + " 条图片路径"})
 }

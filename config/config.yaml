@@ -9,8 +9,8 @@ database:
   dbname: image_platform
 
 imageGen:
-  outputDir: "~/generated_images"
-  logDir: "~/generated_images/logs"
+  outputDir: "/home/zhuyitao/generated_images"
+  logDir: "/home/zhuyitao/generated_images/logs"
   width: 1024
   height: 2048
 

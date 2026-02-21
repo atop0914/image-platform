@@ -3,118 +3,371 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>添加图片 - 图片审核平台</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <title>生成图片 - AI图片审核平台</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #1a365d;
+            --primary-light: #2c5282;
+            --accent: #c53030;
+            --bg-main: #f7fafc;
+            --bg-card: #ffffff;
+            --bg-sidebar: #1a202c;
+            --text-primary: #1a202c;
+            --text-secondary: #4a5568;
+            --text-muted: #718096;
+            --text-light: #e2e8f0;
+            --border: #e2e8f0;
+            --success: #276749;
+            --shadow: 0 1px 3px rgba(0,0,0,0.12);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-main);
+            color: var(--text-primary);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 260px;
+            background: var(--bg-sidebar);
+            color: var(--text-light);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+        }
+
+        .sidebar-header { padding: 24px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+
+        .logo { display: flex; align-items: center; gap: 12px; }
+
+        .logo-icon {
+            width: 40px; height: 40px;
+            background: linear-gradient(135deg, #3182ce, #63b3ed);
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 18px;
+        }
+
+        .logo-text { font-size: 18px; font-weight: 500; }
+        .logo-subtitle { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+        .sidebar-nav { flex: 1; padding: 16px 0; }
+
+        .nav-item {
+            display: flex; align-items: center; gap: 12px;
+            padding: 14px 24px; color: var(--text-muted);
+            text-decoration: none; transition: all 0.2s;
+            border-left: 3px solid transparent;
+        }
+
+        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text-light); }
+        .nav-item.active { background: rgba(49,130,206,0.15); color: #63b3ed; border-left-color: #63b3ed; }
+        .nav-icon { width: 20px; text-align: center; }
+
+        .main { flex: 1; margin-left: 260px; padding: 32px; }
+
+        .page-header { margin-bottom: 32px; }
+
+        .page-title { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+        .page-subtitle { color: var(--text-secondary); font-size: 14px; }
+
+        .content-card {
+            background: var(--bg-card);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            padding: 32px;
+            max-width: 800px;
+        }
+
+        .form-title {
+            font-size: 18px; font-weight: 600;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .form-group { margin-bottom: 24px; }
+
+        .form-label {
+            display: block; font-size: 14px; font-weight: 500;
+            color: var(--text-primary); margin-bottom: 8px;
+        }
+
+        .form-label .required { color: var(--accent); }
+
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: inherit;
+            background: white;
+        }
+
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            outline: none; border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(26,54,93,0.1);
+        }
+
+        .form-textarea { min-height: 120px; resize: vertical; }
+
+        .form-row { display: flex; gap: 16px; }
+        .form-row .form-group { flex: 1; }
+
+        .btn {
+            padding: 12px 24px; border-radius: 4px;
+            font-size: 14px; font-weight: 500;
+            cursor: pointer; border: none;
+            display: inline-block; transition: all 0.2s;
+        }
+
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-light); }
+        .btn-primary:disabled { background: var(--text-muted); cursor: not-allowed; }
+
+        .btn-block { display: block; width: 100%; }
+
+        .result-card {
+            margin-top: 24px; padding: 24px;
+            background: var(--bg-main);
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            display: none;
+        }
+
+        .result-card.show { display: block; }
+
+        .result-image {
+            max-width: 100%;
+            border-radius: 4px;
+            margin-bottom: 16px;
+        }
+
+        .result-info {
+            font-size: 13px; color: var(--text-secondary);
+        }
+
+        .result-info dt { font-weight: 500; color: var(--text-primary); margin-top: 8px; }
+
+        .tips {
+            background: #ebf8ff;
+            border: 1px solid #90cdf4;
+            border-radius: 4px;
+            padding: 16px;
+            margin-bottom: 24px;
+            font-size: 13px;
+            color: #2c5282;
+        }
+
+        .tips-title { font-weight: 600; margin-bottom: 8px; }
+    </style>
 </head>
 <body>
-    <div class="app">
-        <aside class="sidebar">
+    <aside class="sidebar">
+        <div class="sidebar-header">
             <div class="logo">
-                <span class="logo-icon">🖼️</span>
-                <span class="logo-text">图片审核</span>
-            </div>
-            <nav class="nav">
-                <a href="/" class="nav-item">
-                    <span class="nav-icon">📋</span>
-                    <span>待审核</span>
-                </a>
-                <a href="/records" class="nav-item">
-                    <span class="nav-icon">📊</span>
-                    <span>审核记录</span>
-                </a>
-                <a href="/add" class="nav-item active">
-                    <span class="nav-icon">➕</span>
-                    <span>添加图片</span>
-                </a>
-            </nav>
-        </aside>
-
-        <main class="main">
-            <header class="header">
-                <h1>
-                    <a href="/" class="back-link">←</a>
-                    添加图片
-                </h1>
-            </header>
-
-            <div class="content">
-                <div class="form-card">
-                    <form id="addForm" class="add-form">
-                        <div class="form-group">
-                            <label for="name">📷 图片名称</label>
-                            <input type="text" id="name" name="name" placeholder="例如: product_001.jpg" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="date">📅 日期</label>
-                            <input type="date" id="date" name="date" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="path">📂 本地路径</label>
-                            <input type="text" id="path" name="path" placeholder="/home/user/images/product_001.jpg" required>
-                            <p class="form-hint">图片在服务器上的完整路径</p>
-                        </div>
-
-                        <div class="form-group">
-                            <label>预览路径</label>
-                            <div class="path-preview" id="pathPreview">
-                                <span class="placeholder">输入路径后预览</span>
-                            </div>
-                        </div>
-
-                        <div class="form-actions">
-                            <button type="button" class="btn btn-default" onclick="location.href='/'">取消</button>
-                            <button type="submit" class="btn btn-primary">➕ 添加</button>
-                        </div>
-                    </form>
+                <div class="logo-icon">AI</div>
+                <div>
+                    <div class="logo-text">图片审核平台</div>
+                    <div class="logo-subtitle">生产环境控制台</div>
                 </div>
             </div>
-        </main>
-    </div>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="/" class="nav-item">
+                <span class="nav-icon">◉</span>
+                <span>待审核</span>
+            </a>
+            <a href="/gallery" class="nav-item">
+                <span class="nav-icon">◈</span>
+                <span>图库管理</span>
+            </a>
+            <a href="/records" class="nav-item">
+                <span class="nav-icon">◧</span>
+                <span>审核记录</span>
+            </a>
+            <a href="/add" class="nav-item active">
+                <span class="nav-icon">✦</span>
+                <span>生成图片</span>
+            </a>
+        </nav>
+    </aside>
+
+    <main class="main">
+        <div class="page-header">
+            <h1 class="page-title">生成图片</h1>
+            <p class="page-subtitle">AI图片创作平台 - 支持多模型选择</p>
+        </div>
+
+        <div class="content-card">
+            <div class="form-title">创建新图片</div>
+
+            <div class="tips">
+                <div class="tips-title">💡 提示</div>
+                <div>平台和模型可在首页顶部设置。默认使用上次选择的平台和模型。</div>
+            </div>
+
+            <form id="generateForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">生成平台</label>
+                        <select id="platform" class="form-select" required>
+                            <option value="">加载中...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">模型选择</label>
+                        <select id="model" class="form-select">
+                            <option value="">使用平台默认</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">图片尺寸</label>
+                    <select id="size" class="form-select">
+                        <option value="1024x1024">正方形 (1024×1024)</option>
+                        <option value="1920x1080">横版 (1920×1080)</option>
+                        <option value="1080x1920">竖版 (1080×1920)</option>
+                        <option value="2048x2048">高清正方形 (2048×2048)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">描述词 <span class="required">*</span></label>
+                    <textarea id="prompt" class="form-textarea" placeholder="请描述您想要生成的图片，例如：一只可爱的橘猫坐在窗台上，阳光透过窗帘洒在它身上" required></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block" id="submitBtn">
+                    开始生成
+                </button>
+            </form>
+
+            <div class="result-card" id="resultCard">
+                <img id="resultImage" class="result-image" src="" alt="生成结果">
+                <dl class="result-info">
+                    <dt>文件路径</dt>
+                    <dd id="resultPath"></dd>
+                    <dt>使用平台</dt>
+                    <dd id="resultPlatform"></dd>
+                    <dt>使用模型</dt>
+                    <dd id="resultModel"></dd>
+                </dl>
+                <div style="margin-top: 16px;">
+                    <a href="/" class="btn btn-primary">去审核</a>
+                    <a href="/add" class="btn" style="margin-left: 8px;">继续生成</a>
+                </div>
+            </div>
+        </div>
+    </main>
 
     <script>
-        // 设置默认日期为今天
-        document.getElementById('date').valueAsDate = new Date();
+        let platformsData = [];
 
-        // 路径预览
-        document.getElementById('path').addEventListener('input', function() {
-            const preview = document.getElementById('pathPreview');
-            if (this.value) {
-                preview.innerHTML = `<img src="${this.value}" onerror="this.style.display='none'" onload="this.style.display='block'">`;
-            } else {
-                preview.innerHTML = '<span class="placeholder">输入路径后预览</span>';
+        async function loadPlatforms() {
+            try {
+                const [platformsRes, settingsRes] = await Promise.all([
+                    fetch('/api/platforms'),
+                    fetch('/api/settings')
+                ]);
+
+                platformsData = await platformsRes.json();
+                const settings = await settingsRes.json();
+
+                const platformSelect = document.getElementById('platform');
+                platformSelect.innerHTML = '';
+
+                const enabledPlatforms = platformsData.filter(p => p.enabled);
+                enabledPlatforms.forEach(p => {
+                    const option = document.createElement('option');
+                    option.value = p.id;
+                    option.textContent = p.name + (p.description ? ' - ' + p.description : '');
+                    platformSelect.appendChild(option);
+                });
+
+                // 使用用户默认设置
+                if (settings.platform) {
+                    platformSelect.value = settings.platform;
+                    updateModelSelect(settings.platform, settings.model);
+                } else if (enabledPlatforms.length > 0) {
+                    platformSelect.value = enabledPlatforms[0].id;
+                    updateModelSelect(enabledPlatforms[0].id, '');
+                }
+
+            } catch (e) {
+                console.error('加载平台失败:', e);
             }
+        }
+
+        function updateModelSelect(platform, currentModel) {
+            const modelSelect = document.getElementById('model');
+            modelSelect.innerHTML = '<option value="">使用平台默认</option>';
+
+            const p = platformsData.find(p => p.id === platform);
+            if (p && p.models) {
+                p.models.forEach(m => {
+                    if (m) {
+                        const option = document.createElement('option');
+                        option.value = m;
+                        option.textContent = m;
+                        if (m === currentModel) option.selected = true;
+                        modelSelect.appendChild(option);
+                    }
+                });
+            }
+        }
+
+        document.getElementById('platform').addEventListener('change', function() {
+            updateModelSelect(this.value, '');
         });
 
-        // 提交表单
-        document.getElementById('addForm').addEventListener('submit', async function(e) {
+        document.getElementById('generateForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            
-            const formData = {
-                name: document.getElementById('name').value,
-                date: document.getElementById('date').value,
-                path: document.getElementById('path').value
-            };
+
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.textContent = '生成中...';
+
+            const prompt = document.getElementById('prompt').value;
+            const platform = document.getElementById('platform').value;
+            const model = document.getElementById('model').value;
+            const size = document.getElementById('size').value;
 
             try {
-                const res = await fetch('/api/images', {
+                const res = await fetch('/api/generate', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(formData)
+                    body: JSON.stringify({prompt, platform, model, size})
                 });
-                
-                if (res.ok) {
-                    alert('添加成功！');
-                    location.href = '/';
+
+                const data = await res.json();
+
+                if (data.filePath) {
+                    document.getElementById('resultImage').src = data.filePath;
+                    document.getElementById('resultPath').textContent = data.filePath;
+                    document.getElementById('resultPlatform').textContent = data.platform;
+                    document.getElementById('resultModel').textContent = data.model || '默认';
+                    document.getElementById('resultCard').classList.add('show');
                 } else {
-                    const data = await res.json();
-                    alert('添加失败: ' + data.error);
+                    alert('生成失败: ' + (data.error || '未知错误'));
                 }
             } catch (e) {
-                alert('添加失败: ' + e.message);
+                alert('请求失败: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '开始生成';
             }
         });
+
+        loadPlatforms();
     </script>
 </body>
 </html>
